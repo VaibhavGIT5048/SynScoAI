@@ -31,7 +31,9 @@ Policy and strategy teams often miss second-order effects in stakeholder conflic
 
 ```mermaid
 flowchart LR
-    U[User Browser]\nNetlify Frontend -->|POST /pipeline/stream| B[FastAPI Backend\nRailway]
+  U["User Browser<br/>Netlify Frontend"]
+  B["FastAPI Backend<br/>Railway"]
+  U -->|POST /pipeline/stream| B
     B --> C[Graph Extraction]
     B --> D[Agent Generation]
     B --> E[Simulation Engine]
