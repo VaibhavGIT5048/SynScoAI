@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+server.log
+
+# macOS
+.DS_Store
+
+# Frontend
+synsoc-ai-frontend/node_modules/
+synsoc-ai-frontend/dist/
+synsoc-ai-frontend/.vite/
+
+# Coverage and reports
+coverage/
+*.coverage
+
+# IDE
+.vscode/

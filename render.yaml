@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: synsoc-api
+    env: python
+    plan: free
+    autoDeploy: true
+    buildCommand: pip install -r Requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.4-nano
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: RATE_LIMIT_PER_MINUTE_IP
+        sync: false
+      - key: SIM_LIMIT_PER_DAY_VISITOR
+        sync: false
+      - key: MAX_CONCURRENT_SIM_PER_VISITOR
+        sync: false
+      - key: REQUEST_TIMEOUT_SECONDS
+        sync: false
+      - key: MAX_INPUT_CHARS_TOPIC
+        sync: false
+      - key: MAX_INPUT_CHARS_CONTEXT
+        sync: false
