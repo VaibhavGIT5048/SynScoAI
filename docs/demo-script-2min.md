@@ -4,7 +4,7 @@
 Show that users can run a realistic stakeholder simulation from a topic prompt and receive decision-ready insights.
 
 ## Live URLs
-- Frontend: https://synsoc-ai-frontend-vaibhav.netlify.app
+- Frontend: https://synsoc-ai.netlify.app
 - Backend health: https://synsoc-api-production.up.railway.app/health
 - Backend docs: https://synsoc-api-production.up.railway.app/docs
 
