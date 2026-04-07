@@ -34,3 +34,5 @@ coverage/
 
 # IDE
 .vscode/
+# Local Netlify folder
+.netlify
