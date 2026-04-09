@@ -3,6 +3,7 @@ import json
 import random
 import time
 from collections import Counter
+import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -20,6 +21,7 @@ from app.services.simulation_service import run_simulation, _agent_speak, _extra
 from app.services.report_service import generate_report
 
 router = APIRouter(prefix="/pipeline", tags=["Pipeline"])
+logger = logging.getLogger(__name__)
 
 
 def sse(event: str, data: dict) -> str:
@@ -77,16 +79,18 @@ async def run_pipeline(http_request: Request, request: PipelineRequest) -> Pipel
         return await run_guarded_simulation(http_request, operation)
     except HTTPException:
         raise
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Pipeline failed: {str(e)}")
+    except RuntimeError:
+        logger.exception("Pipeline route runtime failure")
+        raise HTTPException(status_code=500, detail="Internal server error.")
+    except Exception:
+        logger.exception("Pipeline route failed")
+        raise HTTPException(status_code=500, detail="Internal server error.")
 
 
 @router.post("/stream")
 async def stream_pipeline(http_request: Request, request: PipelineRequest):
-    enforce_ip_rate_limit(http_request)
-    visitor = reserve_visitor_simulation_slot(http_request)
+    await enforce_ip_rate_limit(http_request)
+    visitor = await reserve_visitor_simulation_slot(http_request)
     deadline = time.monotonic() + settings.request_timeout_seconds
 
     async def generate():
@@ -180,10 +184,11 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
 
         except asyncio.TimeoutError:
             yield sse("error", {"message": "Simulation request timed out."})
-        except Exception as e:
-            yield sse("error", {"message": str(e)})
+        except Exception:
+            logger.exception("Pipeline stream failed")
+            yield sse("error", {"message": "An internal error occurred."})
         finally:
-            release_visitor_simulation_slot(visitor)
+            await release_visitor_simulation_slot(visitor)
 
     return StreamingResponse(
         generate(),

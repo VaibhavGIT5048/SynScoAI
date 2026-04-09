@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -13,6 +14,14 @@ def _read_required(name: str) -> str:
     return value.strip()
 
 
+def _read_optional(name: str) -> Optional[str]:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def _read_required_int(name: str, *, minimum: int = 1) -> int:
     raw = _read_required(name)
     try:
@@ -23,6 +32,20 @@ def _read_required_int(name: str, *, minimum: int = 1) -> int:
     if value < minimum:
         raise RuntimeError(f"{name} must be >= {minimum}.")
     return value
+
+
+def _read_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+
+    raise RuntimeError(f"{name} must be a boolean value.")
 
 
 def _parse_origins(raw_origins: str) -> list[str]:
@@ -41,6 +64,12 @@ def _parse_origins(raw_origins: str) -> list[str]:
     return origins
 
 
+def _parse_optional_csv(raw: Optional[str]) -> list[str]:
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: str
@@ -52,6 +81,9 @@ class Settings:
     request_timeout_seconds: int
     max_input_chars_topic: int
     max_input_chars_context: int
+    redis_url: Optional[str]
+    trust_proxy_headers: bool
+    trusted_proxy_ips: list[str]
 
 
 _OPENAI_MODEL = _read_required("OPENAI_MODEL")
@@ -68,4 +100,7 @@ settings = Settings(
     request_timeout_seconds=_read_required_int("REQUEST_TIMEOUT_SECONDS"),
     max_input_chars_topic=_read_required_int("MAX_INPUT_CHARS_TOPIC"),
     max_input_chars_context=_read_required_int("MAX_INPUT_CHARS_CONTEXT"),
+    redis_url=_read_optional("REDIS_URL"),
+    trust_proxy_headers=_read_bool("TRUST_PROXY_HEADERS", default=False),
+    trusted_proxy_ips=_parse_optional_csv(_read_optional("TRUSTED_PROXY_IPS")),
 )

@@ -134,6 +134,7 @@ class SimulationRequest(BaseModel):
     context: Optional[str] = None
     rounds: int = Field(default=3, ge=1, le=10)
     agents_per_round: int = Field(default=3, ge=1, le=10)
+    agents_per_node: int = Field(default=3, ge=1, le=6)
 
     @field_validator("topic")
     @classmethod

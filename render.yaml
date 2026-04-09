@@ -26,3 +26,9 @@ services:
         sync: false
       - key: MAX_INPUT_CHARS_CONTEXT
         sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: TRUST_PROXY_HEADERS
+        sync: false
+      - key: TRUSTED_PROXY_IPS
+        sync: false

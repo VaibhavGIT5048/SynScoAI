@@ -1,4 +1,5 @@
 from typing import Optional
+import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -29,6 +30,7 @@ class ReportRequest(BaseModel):
 
 
 router = APIRouter(prefix="/report", tags=["Report"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ReportResponse)
@@ -65,7 +67,8 @@ async def report(http_request: Request, request: ReportRequest) -> ReportRespons
 
     except HTTPException:
         raise
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Unable to generate a report for the provided input.")
+    except Exception:
+        logger.exception("Report route failed")
+        raise HTTPException(status_code=500, detail="Internal server error.")
