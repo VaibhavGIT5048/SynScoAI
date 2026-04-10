@@ -1,7 +1,8 @@
 import { useEffect, useState, } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { BarChart3, Users, Terminal, FileText, ArrowLeft, Network } from 'lucide-react';
+import { downloadRunExport, fetchRun } from '../lib/api-client';
 import type { PipelineResponse } from '../lib/api-client';
 import AgentNetworkGraph from '../components/AgentNetworkGraph';
 
@@ -185,15 +186,79 @@ function getStanceGroup(stance: string) {
 
 export default function ResultsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const runId = searchParams.get('run');
   const [data, setData] = useState<PipelineResponse | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('graph');
   const [activeTurnIndex, setActiveTurnIndex] = useState(0);
 
   useEffect(() => {
-    const stored = localStorage.getItem('synsoc_pipeline_result');
-    if (!stored) { navigate('/simulate'); return; }
-    try { setData(JSON.parse(stored)); } catch { navigate('/simulate'); }
-  }, [navigate]);
+    let cancelled = false;
+
+    const loadResult = async () => {
+      setLoadError(null);
+
+      if (runId) {
+        try {
+          const runPayload = await fetchRun(runId);
+          if (cancelled) return;
+
+          setData(runPayload.result);
+          localStorage.setItem('synsoc_pipeline_result', JSON.stringify(runPayload.result));
+          localStorage.setItem('synsoc_last_run_id', runPayload.run_id);
+          return;
+        } catch (error) {
+          if (cancelled) return;
+          const message = error instanceof Error ? error.message : 'Unable to load run from server.';
+          setLoadError(message);
+        }
+      }
+
+      const stored = localStorage.getItem('synsoc_pipeline_result');
+      if (!stored) {
+        navigate('/simulate');
+        return;
+      }
+
+      try {
+        setData(JSON.parse(stored));
+      } catch {
+        navigate('/simulate');
+      }
+    };
+
+    loadResult();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, runId]);
+
+  const handleExport = async (format: 'pdf' | 'docx') => {
+    if (!runId) {
+      setLoadError('Run ID is required for server export. Re-run the simulation from the live pipeline.');
+      return;
+    }
+
+    setExportingFormat(format);
+    try {
+      const blob = await downloadRunExport(runId, format);
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `synsoc-run-${runId}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Export failed.';
+      setLoadError(message);
+    } finally {
+      setExportingFormat(null);
+    }
+  };
 
   if (!data) return null;
 
@@ -338,6 +403,41 @@ export default function ResultsPage() {
           <p className="text-sm" style={{ color: 'hsl(var(--muted-foreground))' }}>
             Topic: <span style={{ color: 'hsl(var(--primary))' }}>{data.topic}</span> · {simulation.total_rounds} rounds · {agents.total_agents} agents
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleExport('pdf')}
+              disabled={!runId || !!exportingFormat}
+              className="px-3 py-2 rounded-md text-xs font-bold disabled:opacity-50"
+              style={{
+                fontFamily: 'var(--font-heading)',
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--foreground))',
+                border: '1px solid hsl(var(--border))',
+              }}
+            >
+              {exportingFormat === 'pdf' ? 'Exporting PDF...' : 'Export PDF'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport('docx')}
+              disabled={!runId || !!exportingFormat}
+              className="px-3 py-2 rounded-md text-xs font-bold disabled:opacity-50"
+              style={{
+                fontFamily: 'var(--font-heading)',
+                background: 'hsl(var(--card))',
+                color: 'hsl(var(--foreground))',
+                border: '1px solid hsl(var(--border))',
+              }}
+            >
+              {exportingFormat === 'docx' ? 'Exporting DOCX...' : 'Export DOCX'}
+            </button>
+          </div>
+          {loadError && (
+            <p className="mt-3 text-xs" style={{ color: '#ef4444' }}>
+              {loadError}
+            </p>
+          )}
         </motion.div>
 
         <div className="flex gap-1 mb-6 p-1 rounded-lg" style={{ background: 'hsl(var(--card))' }}>

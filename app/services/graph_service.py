@@ -3,6 +3,7 @@ import traceback
 
 from dotenv import load_dotenv
 
+from app.config import settings
 from app.models.graph import AnalyzeResponse, GraphEdge, GraphNode
 from app.prompts.graph_prompts import GRAPH_EXTRACTION_SYSTEM, GRAPH_EXTRACTION_USER
 from app.services.llm_client import chat
@@ -24,6 +25,7 @@ async def extract_graph(topic: str, context: str | None = None) -> AnalyzeRespon
                 {"role": "user", "content": user_message},
             ],
             temperature=0.2,
+            model=settings.openai_model_graph,
         )
 
         data = json.loads(raw)

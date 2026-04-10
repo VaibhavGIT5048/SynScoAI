@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import agents, analyze, pipeline, report, simulate
+from app.routers import agents, analyze, pipeline, report, runs, simulate
 
 app = FastAPI(
     title="SynSoc AI",
@@ -28,6 +28,7 @@ app.include_router(agents.router)
 app.include_router(simulate.router)
 app.include_router(report.router)
 app.include_router(pipeline.router)
+app.include_router(runs.router)
 
 
 @app.get("/", tags=["Health"])
@@ -40,9 +41,10 @@ async def root():
             "analyze":         "POST /analyze",
             "agents":          "POST /agents",
             "simulate":        "POST /simulate",
-            "simulate_stream": "POST /simulate/stream",
+            "pipeline_stream": "POST /pipeline/stream",
             "report":          "POST /report",
             "pipeline":        "POST /pipeline",
+            "runs":            "GET /runs/{run_id}",
             "docs":            "/docs",
         },
     }

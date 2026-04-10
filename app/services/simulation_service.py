@@ -6,13 +6,14 @@ from typing import List
 
 from dotenv import load_dotenv
 
+from app.config import settings
 from app.models.graph import Agent, SimulationResponse, SimulationTurn
 from app.prompts.simulation_prompts import SIMULATION_SYSTEM, SIMULATION_USER
 from app.services.llm_client import chat
 
 load_dotenv()
 
-MEMORY_WINDOW = 3
+MEMORY_WINDOW = 2
 
 
 def _build_memory_block(turns: List[SimulationTurn]) -> str:
@@ -30,6 +31,7 @@ async def _agent_speak(
     topic: str,
     recent_turns: List[SimulationTurn],
     round_num: int,
+    model: str,
 ) -> SimulationTurn | None:
 
     memory_block = _build_memory_block(recent_turns)
@@ -39,17 +41,10 @@ async def _agent_speak(
         name=agent.name,
         role=getattr(agent, 'role', 'Policy Analyst'),
         represents=agent.represents,
-        personality=agent.personality,
         goal=agent.goal,
         stance=agent.stance,
         reasoning_style=getattr(agent, 'reasoning_style', 'analytical'),
         knowledge_domain=", ".join(getattr(agent, 'knowledge_domain', [])),
-        skills=", ".join(getattr(agent, 'skills', [])),
-        bias=getattr(agent, 'bias', 'neutral'),
-        confidence=getattr(agent, 'confidence', 0.7),
-        risk_tolerance=getattr(agent, 'risk_tolerance', 'moderate'),
-        assumptions=", ".join(getattr(agent, 'assumptions', [])),
-        concerns=", ".join(getattr(agent, 'concerns', [])),
         memory_count=min(MEMORY_WINDOW, len(recent_turns)),
         memory_block=memory_block,
     )
@@ -61,6 +56,7 @@ async def _agent_speak(
                 {"role": "user", "content": user_message},
             ],
             temperature=0.85,
+            model=model,
         )
 
         data = json.loads(raw)
@@ -93,18 +89,21 @@ async def run_simulation(
     agents: List[Agent],
     rounds: int = 2,
     agents_per_round: int = 3,
+    seed: int | None = None,
 ) -> SimulationResponse:
 
     if not agents:
         raise ValueError("No agents available for simulation")
 
     all_turns: List[SimulationTurn] = []
+    ordered_agents = sorted(agents, key=lambda agent: agent.id)
+    rng = random.Random(seed) if seed is not None else random.Random()
 
     for round_num in range(1, rounds + 1):
         print(f"\n🔄 Round {round_num}/{rounds}")
 
-        speaking_agents = random.sample(
-            agents,
+        speaking_agents = rng.sample(
+            ordered_agents,
             min(agents_per_round, len(agents)),
         )
 
@@ -114,6 +113,7 @@ async def run_simulation(
                 topic=topic,
                 recent_turns=all_turns,
                 round_num=round_num,
+                model=settings.openai_model_simulation,
             )
             if turn:
                 all_turns.append(turn)

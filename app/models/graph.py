@@ -135,6 +135,7 @@ class SimulationRequest(BaseModel):
     rounds: int = Field(default=3, ge=1, le=10)
     agents_per_round: int = Field(default=3, ge=1, le=10)
     agents_per_node: int = Field(default=3, ge=1, le=6)
+    random_seed: int = Field(default=42, ge=0, le=2_147_483_647)
 
     @field_validator("topic")
     @classmethod
@@ -181,6 +182,7 @@ class PipelineRequest(BaseModel):
     rounds: int = Field(default=2, ge=1, le=10)
     agents_per_round: int = Field(default=3, ge=1, le=10)
     agents_per_node: int = Field(default=3, ge=1, le=6)
+    random_seed: int = Field(default=42, ge=0, le=2_147_483_647)
 
     @field_validator("topic")
     @classmethod

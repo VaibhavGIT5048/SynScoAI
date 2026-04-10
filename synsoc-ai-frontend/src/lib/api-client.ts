@@ -88,6 +88,7 @@ export interface PipelineRequest {
   rounds: number;
   agents_per_round: number;
   agents_per_node?: number;
+  random_seed?: number;
 }
 
 export interface PipelineResponse {
@@ -122,6 +123,13 @@ export interface PipelineResponse {
     consensus_areas: string[];
     total_turns_analyzed: number;
   };
+}
+
+export interface RunPayload {
+  run_id: string;
+  owner_id?: string | null;
+  created_at: number;
+  result: PipelineResponse;
 }
 
 export async function runPipeline(request: PipelineRequest): Promise<PipelineResponse> {
@@ -203,4 +211,30 @@ export async function checkHealth(): Promise<{ status: string }> {
   const response = await fetch(`${API_BASE}/health`, { headers: visitorHeaders() });
   if (!response.ok) throw new Error('Health check failed');
   return response.json();
+}
+
+export async function fetchRun(runId: string): Promise<RunPayload> {
+  const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}`, {
+    headers: visitorHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function downloadRunExport(runId: string, format: 'pdf' | 'docx'): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}/export/${format}`, {
+    headers: visitorHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
 }

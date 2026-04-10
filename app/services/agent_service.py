@@ -5,6 +5,7 @@ from typing import List
 
 from dotenv import load_dotenv
 
+from app.config import settings
 from app.models.graph import Agent, AgentResponse, AnalyzeResponse
 from app.prompts.agent_prompts import AGENT_GENERATION_SYSTEM, AGENT_GENERATION_USER
 from app.services.llm_client import chat
@@ -63,6 +64,7 @@ async def _generate_agents_for_node(
                 {"role": "user", "content": user_message},
             ],
             temperature=0.7,
+            model=settings.openai_model_agents,
         )
 
         data = json.loads(raw)

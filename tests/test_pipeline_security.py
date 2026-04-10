@@ -172,6 +172,7 @@ def _patch_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
         agents,
         rounds: int,
         agents_per_round: int,
+        seed: int | None = None,
     ):
         return _build_simulation(topic, rounds)
 
@@ -230,7 +231,7 @@ async def test_pipeline_stream_same_visitor_concurrency_returns_200_then_429(
         await gate.wait()
         return [_build_agent(counter_start)]
 
-    async def fake_agent_speak(agent, topic: str, recent_turns, round_num: int):
+    async def fake_agent_speak(agent, topic: str, recent_turns, round_num: int, model: str):
         return _build_turn(topic)
 
     def fake_extract_tensions(turns):
@@ -329,6 +330,7 @@ async def test_simulate_route_generates_agents_before_simulation(monkeypatch: py
         agents,
         rounds: int,
         agents_per_round: int,
+        seed: int | None = None,
     ):
         captured["agents_count"] = len(agents)
         return _build_simulation(topic, rounds)

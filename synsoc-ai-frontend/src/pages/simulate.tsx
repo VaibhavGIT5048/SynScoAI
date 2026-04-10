@@ -101,6 +101,12 @@ export default function SimulatePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMsg, setStatusMsg] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [lastRunId, setLastRunId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    return window.localStorage.getItem('synsoc_last_run_id');
+  });
 
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [graphEdgesState, setGraphEdgesState] = useState<GraphEdge[]>([]);
@@ -669,12 +675,21 @@ export default function SimulatePage() {
     setNodes([]); setGraphEdgesState([]); setAgents([]); setTurns([]); setDebateEvents([]);
     setSelectedNodeId(null); setSelectedDebateId(null); setSelectedAgentId(null);
     setSelectAllActive(false);
+    setLastRunId(null);
     d3NodesRef.current = []; d3LinksRef.current = [];
     agentsRef.current = [];
     localStorage.removeItem(WORKSPACE_STORAGE_KEY);
+    localStorage.removeItem('synsoc_last_run_id');
     d3InitRef.current = false;
     setPhase('live');
   };
+
+  const getResultsPath = useCallback(() => {
+    if (!lastRunId) {
+      return '/results';
+    }
+    return `/results?run=${encodeURIComponent(lastRunId)}`;
+  }, [lastRunId]);
 
   useEffect(() => {
     const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
@@ -893,6 +908,10 @@ export default function SimulatePage() {
           else if (event === 'report') {
             const result = { topic: form.topic, graph: graphData, agents: agentsData, simulation: simData, report: data.report };
             localStorage.setItem('synsoc_pipeline_result', JSON.stringify(result));
+            if (typeof data.run_id === 'string' && data.run_id) {
+              setLastRunId(data.run_id);
+              localStorage.setItem('synsoc_last_run_id', data.run_id);
+            }
             const workspaceSnapshot: SimulationWorkspaceSnapshot = {
               phase: 'done',
               form: {
@@ -914,6 +933,13 @@ export default function SimulatePage() {
             setStatusMsg('Report ready!'); setPhase('done');
             simRef.current?.alphaTarget(0);
             simRef.current?.stop();
+          }
+
+          else if (event === 'complete') {
+            if (typeof data.run_id === 'string' && data.run_id) {
+              setLastRunId(data.run_id);
+              localStorage.setItem('synsoc_last_run_id', data.run_id);
+            }
           }
 
           else if (event === 'error') { setApiError(data.message); setPhase('config'); }
@@ -1048,7 +1074,7 @@ export default function SimulatePage() {
                       style={{ background: '#191919', color: '#d6d6d6', fontFamily: 'var(--font-sans)' }}>
                       New Simulation
                     </button>
-                    <button type="button" onClick={() => navigate('/results')}
+                    <button type="button" onClick={() => navigate(getResultsPath())}
                       className="flex-1 px-3 py-2 rounded-md text-sm font-bold"
                       style={{ background: 'hsl(var(--primary))', color: '#0a0a0a', fontFamily: 'var(--font-sans)' }}>
                       View Report →
@@ -1364,7 +1390,7 @@ export default function SimulatePage() {
                 {/* Done overlay */}
                 {phase === 'done' && (
                   <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3">
-                    <button onClick={() => navigate('/results')}
+                    <button onClick={() => navigate(getResultsPath())}
                       className="px-6 py-3 rounded-lg font-bold text-sm"
                       style={{ background: 'hsl(var(--primary))', color: '#0a0a0a', fontFamily: 'var(--font-sans)', boxShadow: '0 0 20px hsl(var(--primary)/0.4)' }}>
                       View Full Report →

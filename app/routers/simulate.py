@@ -35,6 +35,7 @@ async def simulate(http_request: Request, request: SimulationRequest) -> Simulat
                 agents=agents_response.agents,
                 rounds=request.rounds,
                 agents_per_round=request.agents_per_round,
+                seed=request.random_seed,
             )
 
         return await run_guarded_simulation(http_request, operation)

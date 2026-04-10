@@ -5,6 +5,7 @@ from typing import List
 
 from dotenv import load_dotenv
 
+from app.config import settings
 from app.models.graph import Agent, ReportResponse, SimulationResponse, StakeholderInsight
 from app.prompts.report_prompts import REPORT_SYSTEM, REPORT_USER
 from app.services.llm_client import chat
@@ -89,6 +90,7 @@ async def generate_report(
                 {"role": "user", "content": user_message},
             ],
             temperature=0.3,
+            model=settings.openai_model_report,
         )
 
         raw = raw.strip()

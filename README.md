@@ -139,10 +139,12 @@ flowchart LR
 | `/analyze` | POST | Topic → stakeholder graph extraction |
 | `/agents` | POST | Agent generation from graph |
 | `/simulate` | POST | Batch simulation run |
-| `/simulate/stream` | POST | Streaming simulation |
 | `/report` | POST | Report generation |
 | `/pipeline` | POST | End-to-end single-request run |
 | `/pipeline/stream` | POST | **End-to-end streaming (primary endpoint)** |
+| `/runs/{run_id}` | GET | Fetch persisted run payload |
+| `/runs/{run_id}/export/pdf` | GET | Export run report as PDF |
+| `/runs/{run_id}/export/docx` | GET | Export run report as DOCX |
 
 Full interactive docs: https://synsoc-api-production.up.railway.app/docs
 
@@ -215,14 +217,21 @@ Open http://localhost:5173
 | Variable | Required | Example | Notes |
 |---|---|---|---|
 | `OPENAI_API_KEY` | ✅ | `sk-...` | Your OpenAI secret key |
-| `OPENAI_MODEL` | ✅ | `gpt-4o-mini` | Model string |
+| `OPENAI_MODEL` | ✅ | `gpt-5.4-mini` | Default model fallback |
+| `OPENAI_MODEL_GRAPH` | ❌ | `gpt-5.4-mini` | Graph extraction model override |
+| `OPENAI_MODEL_AGENTS` | ❌ | `gpt-5.4-mini` | Agent generation model override |
+| `OPENAI_MODEL_SIMULATION` | ❌ | `gpt-5.4-nano` | High-volume turn generation model |
+| `OPENAI_MODEL_REPORT` | ❌ | `gpt-5.4-mini` | Report model override |
 | `ALLOWED_ORIGINS` | ✅ | `http://localhost:5173,...` | Comma-separated CORS origins |
 | `RATE_LIMIT_PER_MINUTE_IP` | ✅ | `60` | Max requests per IP per minute |
 | `SIM_LIMIT_PER_DAY_VISITOR` | ✅ | `25` | Max simulations per visitor per day |
 | `MAX_CONCURRENT_SIM_PER_VISITOR` | ✅ | `1` | Max simultaneous sims per visitor |
-| `REQUEST_TIMEOUT_SECONDS` | ✅ | `120` | Upstream timeout |
+| `REQUEST_TIMEOUT_SECONDS` | ✅ | `300` | Request timeout for full simulation pipeline |
 | `MAX_INPUT_CHARS_TOPIC` | ✅ | `240` | Topic field character limit |
 | `MAX_INPUT_CHARS_CONTEXT` | ✅ | `4000` | Context field character limit |
+| `PIPELINE_STREAM_NODE_CONCURRENCY` | ❌ | `4` | Parallel node processing in stream mode |
+| `RUN_RESULT_TTL_SECONDS` | ❌ | `86400` | Persisted run retention TTL |
+| `REDIS_URL` | ❌ | `redis://...` | Backing store for limits and run persistence |
 
 ### Frontend (`synsoc-ai-frontend/.env`)
 

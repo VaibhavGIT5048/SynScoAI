@@ -11,7 +11,15 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
-        value: gpt-5.4-nano
+        value: gpt-5.4-mini
+      - key: OPENAI_MODEL_GRAPH
+        sync: false
+      - key: OPENAI_MODEL_AGENTS
+        sync: false
+      - key: OPENAI_MODEL_SIMULATION
+        sync: false
+      - key: OPENAI_MODEL_REPORT
+        sync: false
       - key: ALLOWED_ORIGINS
         sync: false
       - key: RATE_LIMIT_PER_MINUTE_IP
@@ -25,6 +33,10 @@ services:
       - key: MAX_INPUT_CHARS_TOPIC
         sync: false
       - key: MAX_INPUT_CHARS_CONTEXT
+        sync: false
+      - key: PIPELINE_STREAM_NODE_CONCURRENCY
+        sync: false
+      - key: RUN_RESULT_TTL_SECONDS
         sync: false
       - key: REDIS_URL
         sync: false
