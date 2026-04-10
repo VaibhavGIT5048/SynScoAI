@@ -38,7 +38,15 @@ services:
         sync: false
       - key: RUN_RESULT_TTL_SECONDS
         sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: REDIS_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_JWT_AUDIENCE
+        sync: false
+      - key: SUPABASE_JWT_ISSUER
         sync: false
       - key: TRUST_PROXY_HEADERS
         sync: false

@@ -105,6 +105,10 @@ class Settings:
     trusted_proxy_ips: list[str]
     pipeline_stream_node_concurrency: int
     run_result_ttl_seconds: int
+    database_url: Optional[str]
+    supabase_jwt_secret: Optional[str]
+    supabase_jwt_audience: Optional[str]
+    supabase_jwt_issuer: Optional[str]
 
 
 _OPENAI_MODEL = _read_required("OPENAI_MODEL")
@@ -132,4 +136,8 @@ settings = Settings(
     trusted_proxy_ips=_parse_optional_csv(_read_optional("TRUSTED_PROXY_IPS")),
     pipeline_stream_node_concurrency=_read_int("PIPELINE_STREAM_NODE_CONCURRENCY", default=4),
     run_result_ttl_seconds=_read_int("RUN_RESULT_TTL_SECONDS", default=86400, minimum=60),
+    database_url=_read_optional("DATABASE_URL"),
+    supabase_jwt_secret=_read_optional("SUPABASE_JWT_SECRET"),
+    supabase_jwt_audience=_read_optional("SUPABASE_JWT_AUDIENCE"),
+    supabase_jwt_issuer=_read_optional("SUPABASE_JWT_ISSUER"),
 )

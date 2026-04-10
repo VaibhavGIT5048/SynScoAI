@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time
@@ -12,6 +13,11 @@ try:
     import redis.asyncio as redis_asyncio
 except Exception:  # pragma: no cover - optional dependency import guard
     redis_asyncio = None
+
+try:
+    import asyncpg
+except Exception:  # pragma: no cover - optional dependency import guard
+    asyncpg = None
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +80,119 @@ class RedisRunStore(RunStore):
         return json.loads(raw)
 
 
+class PostgresRunStore(RunStore):
+    def __init__(self, database_url: str) -> None:
+        if asyncpg is None:
+            raise RuntimeError("asyncpg package is required for Postgres-backed run store")
+
+        self._database_url = database_url
+        self._pool = None
+        self._init_lock = asyncio.Lock()
+
+    async def _ensure_ready(self) -> None:
+        if self._pool is not None:
+            return
+
+        async with self._init_lock:
+            if self._pool is not None:
+                return
+
+            pool = await asyncpg.create_pool(
+                dsn=self._database_url,
+                min_size=1,
+                max_size=5,
+                command_timeout=10,
+            )
+
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS pipeline_runs (
+                        run_id TEXT PRIMARY KEY,
+                        owner_id TEXT NULL,
+                        created_at BIGINT NOT NULL,
+                        expires_at BIGINT NOT NULL,
+                        payload_json TEXT NOT NULL
+                    )
+                    """
+                )
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS pipeline_runs_expires_at_idx
+                    ON pipeline_runs (expires_at)
+                    """
+                )
+
+            self._pool = pool
+
+    async def save(self, run_id: str, payload: dict[str, Any], ttl_seconds: int) -> None:
+        await self._ensure_ready()
+        now = int(time.time())
+        created_at = int(payload.get("created_at") or now)
+        expires_at = created_at + ttl_seconds
+        owner_id = payload.get("owner_id")
+        payload_json = json.dumps(payload)
+
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO pipeline_runs (run_id, owner_id, created_at, expires_at, payload_json)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (run_id)
+                DO UPDATE SET
+                    owner_id = EXCLUDED.owner_id,
+                    created_at = EXCLUDED.created_at,
+                    expires_at = EXCLUDED.expires_at,
+                    payload_json = EXCLUDED.payload_json
+                """,
+                run_id,
+                owner_id,
+                created_at,
+                expires_at,
+                payload_json,
+            )
+
+    async def get(self, run_id: str) -> dict[str, Any] | None:
+        await self._ensure_ready()
+        now = int(time.time())
+
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT payload_json
+                FROM pipeline_runs
+                WHERE run_id = $1 AND expires_at > $2
+                """,
+                run_id,
+                now,
+            )
+            if row is None:
+                await conn.execute(
+                    """
+                    DELETE FROM pipeline_runs
+                    WHERE run_id = $1 AND expires_at <= $2
+                    """,
+                    run_id,
+                    now,
+                )
+                return None
+
+        payload_json = row["payload_json"]
+        if isinstance(payload_json, dict):
+            return payload_json
+        return json.loads(payload_json)
+
+
 def _create_run_store() -> RunStore:
+    if settings.database_url:
+        try:
+            logger.info("Using Postgres-backed run store")
+            return PostgresRunStore(settings.database_url)
+        except Exception:
+            logger.exception(
+                "Failed to initialize Postgres run store, falling back to Redis/in-memory"
+            )
+
     if settings.redis_url:
         try:
             logger.info("Using Redis-backed run store")

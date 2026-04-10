@@ -19,6 +19,7 @@ from app.services.graph_service import extract_graph
 from app.services.agent_service import generate_agents_from_graph
 from app.services.simulation_service import run_simulation, _agent_speak, _extract_tensions
 from app.services.report_service import generate_report
+from app.services.auth_service import get_request_user_id
 from app.services.run_store import create_run_id, save_pipeline_run
 
 router = APIRouter(prefix="/pipeline", tags=["Pipeline"])
@@ -92,6 +93,7 @@ async def run_pipeline(http_request: Request, request: PipelineRequest) -> Pipel
 @router.post("/stream")
 async def stream_pipeline(http_request: Request, request: PipelineRequest):
     await enforce_ip_rate_limit(http_request)
+    owner_id = get_request_user_id(http_request, required=False)
     visitor = await reserve_visitor_simulation_slot(http_request)
     deadline = time.monotonic() + settings.request_timeout_seconds
     run_id = create_run_id()
@@ -220,7 +222,7 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
                 report=report,
             ).model_dump()
 
-            await save_pipeline_run(run_id=run_id, result_payload=result_payload)
+            await save_pipeline_run(run_id=run_id, result_payload=result_payload, owner_id=owner_id)
 
             yield sse("report", {"report": report.model_dump(), "run_id": run_id})
             yield sse("complete", {"message": "Pipeline complete!", "run_id": run_id})
