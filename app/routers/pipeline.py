@@ -19,7 +19,6 @@ from app.services.graph_service import extract_graph
 from app.services.agent_service import generate_agents_from_graph
 from app.services.simulation_service import run_simulation, _agent_speak, _extract_tensions
 from app.services.report_service import generate_report
-from app.services.auth_service import get_request_user_id
 from app.services.run_store import create_run_id, save_pipeline_run
 
 router = APIRouter(prefix="/pipeline", tags=["Pipeline"])
@@ -40,8 +39,6 @@ def _remaining_timeout(deadline: float) -> float:
 @router.post("", response_model=PipelineResponse)
 async def run_pipeline(http_request: Request, request: PipelineRequest) -> PipelineResponse:
     try:
-        await get_request_user_id(http_request, required=True)
-
         async def operation() -> PipelineResponse:
             logger.info("Starting pipeline for topic: %s", request.topic)
 
@@ -95,7 +92,7 @@ async def run_pipeline(http_request: Request, request: PipelineRequest) -> Pipel
 @router.post("/stream")
 async def stream_pipeline(http_request: Request, request: PipelineRequest):
     await enforce_ip_rate_limit(http_request)
-    owner_id = await get_request_user_id(http_request, required=True)
+    owner_id = None
     visitor = await reserve_visitor_simulation_slot(http_request)
     deadline = time.monotonic() + settings.request_timeout_seconds
     run_id = create_run_id()

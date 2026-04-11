@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Brain, Network, BarChart3 } from 'lucide-react';
 import ThemeAnimatedBackground from '@/components/ThemeAnimatedBackground';
-import HomeAuthPanel from '@/components/HomeAuthPanel';
 
 const MotionLink = motion(Link);
 
@@ -171,7 +170,6 @@ export default function HomePage() {
             </MotionLink>
           </motion.div>
 
-          <HomeAuthPanel />
         </div>
 
         {/* Bottom fade */}

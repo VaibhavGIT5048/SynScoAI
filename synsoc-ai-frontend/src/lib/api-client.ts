@@ -1,5 +1,3 @@
-import { getSupabaseAccessToken } from './supabase-auth';
-
 const LOCAL_BACKEND_FALLBACK = 'http://127.0.0.1:8000';
 
 function isLocalBrowserHost(): boolean {
@@ -93,30 +91,16 @@ function getVisitorId(): string {
 }
 
 async function jsonHeaders(): Promise<HeadersInit> {
-  const headers: Record<string, string> = {
+  return {
     'Content-Type': 'application/json',
     'X-Visitor-Id': getVisitorId(),
   };
-
-  const accessToken = await getSupabaseAccessToken();
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
-  }
-
-  return headers;
 }
 
 async function visitorHeaders(): Promise<HeadersInit> {
-  const headers: Record<string, string> = {
+  return {
     'X-Visitor-Id': getVisitorId(),
   };
-
-  const accessToken = await getSupabaseAccessToken();
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
-  }
-
-  return headers;
 }
 
 export interface GraphNode {

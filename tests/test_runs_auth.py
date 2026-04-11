@@ -2,7 +2,6 @@ import os
 
 import httpx
 import pytest
-from fastapi import HTTPException
 
 # Keep tests self-contained when local env vars are not exported.
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
@@ -38,16 +37,11 @@ async def test_get_run_public_payload_allows_unauthenticated_access(monkeypatch:
 
 
 @pytest.mark.asyncio
-async def test_get_run_owned_payload_requires_same_user(monkeypatch: pytest.MonkeyPatch):
+async def test_get_run_owned_payload_is_public_without_auth(monkeypatch: pytest.MonkeyPatch):
     async def fake_get_pipeline_run(run_id: str):
         return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
 
-    async def fake_get_request_user_id(request, *, required: bool):
-        assert required is True
-        return "user-2"
-
     monkeypatch.setattr(runs_router, "get_pipeline_run", fake_get_pipeline_run)
-    monkeypatch.setattr(runs_router, "get_request_user_id", fake_get_request_user_id)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -55,28 +49,7 @@ async def test_get_run_owned_payload_requires_same_user(monkeypatch: pytest.Monk
     ) as client:
         response = await client.get("/runs/owned-run")
 
-    assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_get_run_owned_payload_missing_token_returns_401(monkeypatch: pytest.MonkeyPatch):
-    async def fake_get_pipeline_run(run_id: str):
-        return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
-
-    async def fake_get_request_user_id(request, *, required: bool):
-        assert required is True
-        raise HTTPException(status_code=401, detail="Missing bearer token.")
-
-    monkeypatch.setattr(runs_router, "get_pipeline_run", fake_get_pipeline_run)
-    monkeypatch.setattr(runs_router, "get_request_user_id", fake_get_request_user_id)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        response = await client.get("/runs/owned-run")
-
-    assert response.status_code == 401
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -84,16 +57,11 @@ async def test_export_pdf_owned_payload_requires_access(monkeypatch: pytest.Monk
     async def fake_get_pipeline_run(run_id: str):
         return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
 
-    async def fake_get_request_user_id(request, *, required: bool):
-        assert required is True
-        return "user-1"
-
     def fake_build_pdf_bytes(run_payload: dict) -> bytes:
         assert run_payload["run_id"] == "owned-run"
         return b"%PDF-test"
 
     monkeypatch.setattr(runs_router, "get_pipeline_run", fake_get_pipeline_run)
-    monkeypatch.setattr(runs_router, "get_request_user_id", fake_get_request_user_id)
     monkeypatch.setattr(runs_router, "build_pdf_bytes", fake_build_pdf_bytes)
 
     async with httpx.AsyncClient(
@@ -111,16 +79,11 @@ async def test_export_docx_owned_payload_requires_access(monkeypatch: pytest.Mon
     async def fake_get_pipeline_run(run_id: str):
         return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
 
-    async def fake_get_request_user_id(request, *, required: bool):
-        assert required is True
-        return "user-1"
-
     def fake_build_docx_bytes(run_payload: dict) -> bytes:
         assert run_payload["run_id"] == "owned-run"
         return b"PK-test"
 
     monkeypatch.setattr(runs_router, "get_pipeline_run", fake_get_pipeline_run)
-    monkeypatch.setattr(runs_router, "get_request_user_id", fake_get_request_user_id)
     monkeypatch.setattr(runs_router, "build_docx_bytes", fake_build_docx_bytes)
 
     async with httpx.AsyncClient(
