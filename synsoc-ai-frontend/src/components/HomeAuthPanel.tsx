@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
+  getSupabaseEmailRedirectUrl,
   getSupabaseUserEmail,
   isSupabaseAuthConfigured,
   signInWithSupabasePassword,
+  signUpWithSupabasePassword,
   signOutFromSupabase,
   subscribeSupabaseAuth,
 } from '@/lib/supabase-auth';
@@ -12,9 +14,53 @@ export default function HomeAuthPanel() {
   const [email, setEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [notice, setNotice] = useState<string | null>(null);
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '' });
 
   const enabled = isSupabaseAuthConfigured();
+  const emailRedirectUrl = getSupabaseEmailRedirectUrl();
+
+  const redirectToLocalhost = (() => {
+    if (!emailRedirectUrl) {
+      return false;
+    }
+
+    try {
+      const host = new URL(emailRedirectUrl).hostname;
+      return host === 'localhost' || host === '127.0.0.1';
+    } catch {
+      return false;
+    }
+  })();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const hash = window.location.hash;
+    if (!hash || !hash.includes('error=')) {
+      return;
+    }
+
+    const params = new URLSearchParams(hash.slice(1));
+    const errorCode = params.get('error_code');
+    const errorDescription = params.get('error_description');
+    if (!errorCode && !errorDescription) {
+      return;
+    }
+
+    if (errorCode === 'otp_expired') {
+      setError('Confirmation link expired or already used. Sign up again to receive a new email link.');
+      setMode('signup');
+    } else {
+      setError(errorDescription ?? 'Authentication link is invalid. Please try again.');
+    }
+    setNotice(null);
+
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -41,17 +87,46 @@ export default function HomeAuthPanel() {
     };
   }, [enabled]);
 
-  const handleSignIn = async (event: React.FormEvent) => {
+  const switchMode = (next: 'signin' | 'signup') => {
+    setMode(next);
+    setError(null);
+    setNotice(null);
+    setForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+  };
+
+  const handleAuthSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    setNotice(null);
     setBusy(true);
 
     try {
-      const signedInEmail = await signInWithSupabasePassword(form.email.trim(), form.password);
-      setEmail(signedInEmail);
-      setForm((prev) => ({ ...prev, password: '' }));
-    } catch (signInError) {
-      const message = signInError instanceof Error ? signInError.message : 'Sign in failed.';
+      const normalizedEmail = form.email.trim();
+
+      if (mode === 'signup') {
+        if (form.password.length < 8) {
+          throw new Error('Password must be at least 8 characters.');
+        }
+        if (form.password !== form.confirmPassword) {
+          throw new Error('Passwords do not match.');
+        }
+
+        const result = await signUpWithSupabasePassword(normalizedEmail, form.password);
+        if (result.requiresEmailConfirmation) {
+          setNotice('Account created. Please confirm your email, then sign in.');
+          setMode('signin');
+        } else {
+          setEmail(result.email);
+          setNotice('Account created and signed in.');
+        }
+      } else {
+        const signedInEmail = await signInWithSupabasePassword(normalizedEmail, form.password);
+        setEmail(signedInEmail);
+      }
+
+      setForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : 'Authentication failed.';
       setError(message);
     } finally {
       setBusy(false);
@@ -60,6 +135,7 @@ export default function HomeAuthPanel() {
 
   const handleSignOut = async () => {
     setError(null);
+    setNotice(null);
     setBusy(true);
 
     try {
@@ -119,7 +195,36 @@ export default function HomeAuthPanel() {
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSignIn} className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+        <>
+          <div className="mt-2 inline-flex rounded-md border border-border p-1">
+            <button
+              type="button"
+              onClick={() => switchMode('signin')}
+              className="rounded px-2 py-1 text-[11px] font-bold tracking-wide"
+              style={{
+                background: mode === 'signin' ? 'hsl(var(--primary))' : 'transparent',
+                color: mode === 'signin' ? '#0a0a0a' : 'hsl(var(--foreground))',
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('signup')}
+              className="rounded px-2 py-1 text-[11px] font-bold tracking-wide"
+              style={{
+                background: mode === 'signup' ? 'hsl(var(--primary))' : 'transparent',
+                color: mode === 'signup' ? '#0a0a0a' : 'hsl(var(--foreground))',
+              }}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          <form
+            onSubmit={handleAuthSubmit}
+            className={`mt-2 grid grid-cols-1 gap-2 ${mode === 'signup' ? 'sm:grid-cols-1' : 'sm:grid-cols-[1fr_1fr_auto]'}`}
+          >
           <input
             type="email"
             placeholder="Email"
@@ -136,20 +241,47 @@ export default function HomeAuthPanel() {
             className="rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
             required
           />
+          {mode === 'signup' && (
+            <input
+              type="password"
+              placeholder="Confirm password"
+              value={form.confirmPassword}
+              onChange={(event) => setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
+              required
+            />
+          )}
           <button
             type="submit"
             disabled={busy}
             className="rounded-md px-3 py-2 text-xs font-bold transition-all hover:scale-105"
             style={{ background: 'hsl(var(--primary))', color: '#0a0a0a', opacity: busy ? 0.7 : 1 }}
           >
-            {busy ? 'Signing in...' : 'Sign in'}
+            {busy ? (mode === 'signup' ? 'Creating account...' : 'Signing in...') : mode === 'signup' ? 'Create account' : 'Sign in'}
           </button>
-        </form>
+          </form>
+
+          <p className="mt-2 text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+            No default password is set. Use Sign Up first, then Sign In.
+          </p>
+          {redirectToLocalhost && (
+            <p className="mt-2 text-xs" style={{ color: '#f59e0b' }}>
+              Confirmation emails currently redirect to localhost. If you open email on another device, set
+              {' '}<strong>VITE_SUPABASE_EMAIL_REDIRECT_URL</strong>{' '}to a public app URL.
+            </p>
+          )}
+        </>
       )}
 
       {error && (
         <p className="mt-2 text-xs" style={{ color: '#ef4444' }}>
           {error}
+        </p>
+      )}
+
+      {notice && (
+        <p className="mt-2 text-xs" style={{ color: 'hsl(var(--primary))' }}>
+          {notice}
         </p>
       )}
     </motion.div>

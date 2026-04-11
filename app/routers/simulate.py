@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.models.graph import SimulationRequest, SimulationResponse
 from app.security import run_guarded_simulation
+from app.services.auth_service import get_request_user_id
 from app.services.agent_service import generate_agents_from_graph
 from app.services.graph_service import extract_graph
 from app.services.simulation_service import run_simulation
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 )
 async def simulate(http_request: Request, request: SimulationRequest) -> SimulationResponse:
     try:
+        await get_request_user_id(http_request, required=True)
+
         async def operation() -> SimulationResponse:
             graph = await extract_graph(topic=request.topic, context=request.context)
             agents_response = await generate_agents_from_graph(

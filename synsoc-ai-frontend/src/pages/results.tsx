@@ -190,6 +190,7 @@ export default function ResultsPage() {
   const [searchParams] = useSearchParams();
   const runId = searchParams.get('run');
   const [data, setData] = useState<PipelineResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('graph');
@@ -199,34 +200,30 @@ export default function ResultsPage() {
     let cancelled = false;
 
     const loadResult = async () => {
+      setIsLoading(true);
       setLoadError(null);
+      setData(null);
 
-      if (runId) {
-        try {
-          const runPayload = await fetchRun(runId);
-          if (cancelled) return;
-
-          setData(runPayload.result);
-          localStorage.setItem('synsoc_pipeline_result', JSON.stringify(runPayload.result));
-          localStorage.setItem('synsoc_last_run_id', runPayload.run_id);
-          return;
-        } catch (error) {
-          if (cancelled) return;
-          const message = error instanceof Error ? error.message : 'Unable to load run from server.';
-          setLoadError(message);
-        }
-      }
-
-      const stored = localStorage.getItem('synsoc_pipeline_result');
-      if (!stored) {
-        navigate('/simulate');
+      if (!runId) {
+        setIsLoading(false);
         return;
       }
 
       try {
-        setData(JSON.parse(stored));
-      } catch {
-        navigate('/simulate');
+        const runPayload = await fetchRun(runId);
+        if (cancelled) return;
+
+        setData(runPayload.result);
+        localStorage.setItem('synsoc_pipeline_result', JSON.stringify(runPayload.result));
+        localStorage.setItem('synsoc_last_run_id', runPayload.run_id);
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : 'Unable to load run from server.';
+        setLoadError(message);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -234,7 +231,7 @@ export default function ResultsPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, runId]);
+  }, [runId]);
 
   const handleExport = async (format: 'pdf' | 'docx') => {
     if (!runId) {
@@ -261,7 +258,67 @@ export default function ResultsPage() {
     }
   };
 
-  if (!data) return null;
+  if (isLoading) {
+    return (
+      <>
+        <title>Simulation Results — SynSoc AI</title>
+        <section className="relative min-h-screen overflow-hidden">
+          <ThemeAnimatedBackground className="fixed inset-0" />
+          <div className="relative z-10 container mx-auto px-4 py-16 max-w-3xl">
+            <div className="rounded-xl border p-8" style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
+              <p className="text-sm" style={{ color: 'hsl(var(--muted-foreground))' }}>Loading results...</p>
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  if (!data) {
+    return (
+      <>
+        <title>Simulation Results — SynSoc AI</title>
+        <section className="relative min-h-screen overflow-hidden">
+          <ThemeAnimatedBackground className="fixed inset-0" />
+          <div className="relative z-10 container mx-auto px-4 py-16 max-w-3xl">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border p-8"
+              style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
+            >
+              <span className="text-xs font-bold tracking-widest uppercase mb-3 block"
+                style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>
+                Results
+              </span>
+              <h1 className="text-2xl font-bold mb-2"
+                style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>
+                Simulate First To See The Report
+              </h1>
+              <p className="text-sm mb-6" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                Start a new simulation, then open results to view graph, network, transcript, and report insights.
+              </p>
+
+              {loadError && (
+                <p className="mb-4 text-xs" style={{ color: '#ef4444' }}>
+                  {loadError}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => navigate('/simulate')}
+                className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-bold"
+                style={{ background: 'hsl(var(--primary))', color: '#0a0a0a', fontFamily: 'var(--font-heading)' }}
+              >
+                Start Simulation
+              </button>
+            </motion.div>
+          </div>
+        </section>
+      </>
+    );
+  }
 
   const { graph, agents, simulation, report } = data;
   const dynamicConflictScore = computeConflictScore(simulation.turns);

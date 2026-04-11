@@ -96,6 +96,12 @@ export default defineConfig(({ mode }) => ({
 		port: parseInt(process.env.PORT || "5173"),
 		strictPort: !!process.env.PORT,
 		proxy: {
+			"/backend": {
+				target: backendApiTarget,
+				changeOrigin: true,
+				secure: false,
+				rewrite: (urlPath) => urlPath.replace(/^\/backend/, ""),
+			},
 			"/api": {
 				target: backendApiTarget,
 				changeOrigin: true,
@@ -123,6 +129,12 @@ export default defineConfig(({ mode }) => ({
 		port: parseInt(process.env.PORT || "5173"),
 		strictPort: !!process.env.PORT,
 		proxy: {
+			"/backend": {
+				target: backendApiTarget,
+				changeOrigin: true,
+				secure: false,
+				rewrite: (urlPath) => urlPath.replace(/^\/backend/, ""),
+			},
 			"/api": {
 				target: backendApiTarget,
 				changeOrigin: true,

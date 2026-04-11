@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from fastapi import HTTPException
 from starlette.requests import Request
 
 # Keep tests self-contained when local env vars are not exported.
@@ -31,6 +32,7 @@ from app.models.graph import (
     StakeholderInsight,
 )
 import app.routers.pipeline as pipeline_router
+import app.routers.report as report_router
 import app.routers.simulate as simulate_router
 import app.security as security
 import app.services.agent_service as agent_service
@@ -136,6 +138,17 @@ def _reset_security_state():
     yield
 
     security.reset_inmemory_state_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def _patch_required_auth(monkeypatch: pytest.MonkeyPatch):
+    async def fake_get_request_user_id(_request, *, required: bool):
+        assert required is True
+        return "test-user"
+
+    monkeypatch.setattr(pipeline_router, "get_request_user_id", fake_get_request_user_id)
+    monkeypatch.setattr(report_router, "get_request_user_id", fake_get_request_user_id)
+    monkeypatch.setattr(simulate_router, "get_request_user_id", fake_get_request_user_id)
 
 
 def _build_request(client_ip: str, headers: dict[str, str]) -> Request:
@@ -415,6 +428,83 @@ async def test_pipeline_stream_error_is_sanitized(monkeypatch: pytest.MonkeyPatc
     assert response.status_code == 200
     assert "An internal error occurred." in body_text
     assert "streaming secret provider failure" not in body_text
+
+
+@pytest.mark.asyncio
+async def test_pipeline_requires_auth_when_missing(monkeypatch: pytest.MonkeyPatch):
+    async def fake_missing_auth(_request, *, required: bool):
+        assert required is True
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+
+    monkeypatch.setattr(pipeline_router, "get_request_user_id", fake_missing_auth)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/pipeline",
+            json=_payload(),
+            headers={"X-Visitor-Id": "pipeline-auth-required"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing bearer token."
+
+
+@pytest.mark.asyncio
+async def test_simulate_requires_auth_when_missing(monkeypatch: pytest.MonkeyPatch):
+    async def fake_missing_auth(_request, *, required: bool):
+        assert required is True
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+
+    monkeypatch.setattr(simulate_router, "get_request_user_id", fake_missing_auth)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/simulate",
+            json={
+                "topic": "Public transit fare increase",
+                "context": "Simulation endpoint auth test",
+                "rounds": 1,
+                "agents_per_round": 1,
+                "agents_per_node": 1,
+            },
+            headers={"X-Visitor-Id": "simulate-auth-required"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing bearer token."
+
+
+@pytest.mark.asyncio
+async def test_report_requires_auth_when_missing(monkeypatch: pytest.MonkeyPatch):
+    async def fake_missing_auth(_request, *, required: bool):
+        assert required is True
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+
+    monkeypatch.setattr(report_router, "get_request_user_id", fake_missing_auth)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.post(
+            "/report",
+            json={
+                "topic": "Public transit fare increase",
+                "context": "Report endpoint auth test",
+                "rounds": 1,
+                "agents_per_round": 1,
+            },
+            headers={"X-Visitor-Id": "report-auth-required"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing bearer token."
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.models.graph import ReportResponse, validate_context_text, validate_topic_text
 from app.security import run_guarded_simulation
+from app.services.auth_service import get_request_user_id
 from app.services.report_service import generate_report
 from app.services.simulation_service import run_simulation
 from app.services.agent_service import generate_agents_from_graph
@@ -36,6 +37,8 @@ logger = logging.getLogger(__name__)
 @router.post("", response_model=ReportResponse)
 async def report(http_request: Request, request: ReportRequest) -> ReportResponse:
     try:
+        await get_request_user_id(http_request, required=True)
+
         async def operation() -> ReportResponse:
             print("🔄 Running simulation for report...")
 

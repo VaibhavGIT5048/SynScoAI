@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+const explicitEmailRedirectUrl = import.meta.env.VITE_SUPABASE_EMAIL_REDIRECT_URL?.trim();
 
 const configured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -18,6 +19,27 @@ if (configured) {
 
 export function isSupabaseAuthConfigured(): boolean {
   return configured;
+}
+
+function resolveEmailRedirectUrl(): string | undefined {
+  if (explicitEmailRedirectUrl) {
+    return explicitEmailRedirectUrl;
+  }
+
+  const publicUrl = import.meta.env.VITE_PUBLIC_URL?.trim();
+  if (publicUrl) {
+    return publicUrl;
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/`;
+  }
+
+  return undefined;
+}
+
+export function getSupabaseEmailRedirectUrl(): string | null {
+  return resolveEmailRedirectUrl() ?? null;
 }
 
 export async function getSupabaseAccessToken(): Promise<string | null> {
@@ -62,6 +84,31 @@ export async function signInWithSupabasePassword(email: string, password: string
   }
 
   return signedInEmail;
+}
+
+export async function signUpWithSupabasePassword(
+  email: string,
+  password: string
+): Promise<{ email: string; requiresEmailConfirmation: boolean }> {
+  if (!supabaseClient) {
+    throw new Error('Supabase auth is not configured in frontend env.');
+  }
+
+  const emailRedirectTo = resolveEmailRedirectUrl();
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: emailRedirectTo ? { emailRedirectTo } : undefined,
+  });
+  if (error) {
+    throw new Error(error.message || 'Sign up failed.');
+  }
+
+  const signedUpEmail = data.user?.email || email;
+  return {
+    email: signedUpEmail,
+    requiresEmailConfirmation: !data.session,
+  };
 }
 
 export async function signOutFromSupabase(): Promise<void> {

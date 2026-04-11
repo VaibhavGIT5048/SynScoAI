@@ -5,6 +5,11 @@ import { Play, Info } from 'lucide-react';
 import * as d3 from 'd3';
 import { streamPipeline } from '../lib/api-client';
 import type { GraphNode, GraphEdge, Agent, SimulationTurn } from '../lib/api-client';
+import {
+  getSupabaseUserEmail,
+  isSupabaseAuthConfigured,
+  subscribeSupabaseAuth,
+} from '../lib/supabase-auth';
 
 const STANCE_COLORS: Record<string, string> = {
   strongly_for: '#00ff88',
@@ -101,6 +106,7 @@ export default function SimulatePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMsg, setStatusMsg] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
   const [lastRunId, setLastRunId] = useState<string | null>(() => {
     if (typeof window === 'undefined') {
       return null;
@@ -130,6 +136,35 @@ export default function SimulatePage() {
   }, {});
 
   const [sections, setSections] = useState({ legend: true, roster: true, timeline: true });
+
+  const authConfigured = isSupabaseAuthConfigured();
+  const canRunSimulation = Boolean(authConfigured && signedInEmail);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!authConfigured) {
+      setSignedInEmail(null);
+      return () => undefined;
+    }
+
+    getSupabaseUserEmail().then((value) => {
+      if (active) {
+        setSignedInEmail(value);
+      }
+    });
+
+    const unsubscribe = subscribeSupabaseAuth((value) => {
+      if (active) {
+        setSignedInEmail(value);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [authConfigured]);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -668,6 +703,19 @@ export default function SimulatePage() {
   // ── SUBMIT ────────────────────────────────────────────────────────────
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!authConfigured) {
+      setApiError(
+        'Simulation requires sign-in, but Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in synsoc-ai-frontend/.env and restart frontend.'
+      );
+      return;
+    }
+
+    if (!signedInEmail) {
+      setApiError('Please sign in before running a simulation.');
+      return;
+    }
+
     const errs: Record<string, string> = {};
     if (!form.topic.trim()) errs.topic = 'Topic is required.';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
@@ -960,6 +1008,18 @@ export default function SimulatePage() {
     outline: 'none', fontFamily: 'var(--font-sans)',
   });
 
+  const showBackendHint = Boolean(
+    apiError &&
+      (apiError.toLowerCase().includes('unable to reach backend') ||
+        apiError.toLowerCase().includes('vite_api_base_url'))
+  );
+  const showAuthHint = Boolean(
+    apiError &&
+      (apiError.toLowerCase().includes('missing bearer token') ||
+        apiError.toLowerCase().includes('invalid or expired access token') ||
+        apiError.toLowerCase().includes('please sign in'))
+  );
+
   return (
     <>
       <title>Configure Simulation — SynSoc AI</title>
@@ -978,10 +1038,58 @@ export default function SimulatePage() {
                 Watch agents spawn and debate in real time.
               </p>
             </div>
+            {!authConfigured && (
+              <div className="mb-6 p-4 rounded-lg border" style={{ borderColor: '#f59e0b', background: '#f59e0b10' }}>
+                <p className="text-sm font-bold" style={{ color: '#f59e0b' }}>Sign-in required but not configured</p>
+                <p className="text-xs mt-1" style={{ color: '#f59e0b', opacity: 0.9 }}>
+                  Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in synsoc-ai-frontend/.env, then restart frontend.
+                </p>
+              </div>
+            )}
+            {authConfigured && !signedInEmail && (
+              <div className="mb-6 p-4 rounded-lg border flex flex-col gap-3" style={{ borderColor: '#00d48a', background: '#00d48a12' }}>
+                <div>
+                  <p className="text-sm font-bold" style={{ color: '#00ff88' }}>Sign in to run simulation</p>
+                  <p className="text-xs mt-1" style={{ color: '#86efac', opacity: 0.95 }}>
+                    Authentication is now mandatory for simulation endpoints.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="w-fit rounded-md px-3 py-2 text-xs font-bold"
+                  style={{ background: '#00d48a', color: '#0a0a0a' }}
+                >
+                  Go to Sign In
+                </button>
+              </div>
+            )}
+            {signedInEmail && (
+              <div className="mb-6 p-3 rounded-lg border" style={{ borderColor: '#00d48a55', background: '#00d48a12' }}>
+                <p className="text-xs" style={{ color: '#86efac' }}>
+                  Signed in as <strong>{signedInEmail}</strong>
+                </p>
+              </div>
+            )}
             {apiError && (
               <div className="mb-6 p-4 rounded-lg border" style={{ borderColor: '#ef4444', background: '#ef444410' }}>
                 <p className="text-sm font-bold" style={{ color: '#ef4444' }}>Simulation failed</p>
                 <p className="text-xs mt-1" style={{ color: '#ef4444', opacity: 0.8 }}>{apiError}</p>
+                {showAuthHint && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/')}
+                    className="mt-3 rounded-md px-3 py-2 text-xs font-bold"
+                    style={{ background: '#ef4444', color: '#0a0a0a' }}
+                  >
+                    Sign In
+                  </button>
+                )}
+                {showBackendHint && (
+                  <p className="text-xs mt-2" style={{ color: '#ef4444', opacity: 0.85 }}>
+                    Start backend with: <strong>cd /Users/vaibhavgupta7047/Documents/Projects/SynScoAI &amp;&amp; source .venv/bin/activate &amp;&amp; uvicorn app.main:app --host 127.0.0.1 --port 8000</strong>
+                  </p>
+                )}
               </div>
             )}
             <div className="rounded-xl border p-8" style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--primary) / 0.2)' }}>
@@ -1024,8 +1132,16 @@ export default function SimulatePage() {
                 </div>
                 <div className="h-px" style={{ background: 'hsl(var(--border))' }} />
                 <button type="submit" className="w-full flex items-center justify-center gap-2 py-3 rounded-md font-bold text-sm"
-                  style={{ fontFamily: 'var(--font-heading)', background: 'hsl(var(--primary))', color: '#0a0a0a', boxShadow: '0 0 20px hsl(var(--primary) / 0.3)' }}>
-                  <Play size={15} /> Run Simulation
+                  disabled={!canRunSimulation}
+                  style={{
+                    fontFamily: 'var(--font-heading)',
+                    background: canRunSimulation ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
+                    color: '#0a0a0a',
+                    boxShadow: canRunSimulation ? '0 0 20px hsl(var(--primary) / 0.3)' : 'none',
+                    opacity: canRunSimulation ? 1 : 0.75,
+                    cursor: canRunSimulation ? 'pointer' : 'not-allowed',
+                  }}>
+                  <Play size={15} /> {canRunSimulation ? 'Run Simulation' : 'Sign In to Run'}
                 </button>
               </form>
             </div>
