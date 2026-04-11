@@ -1,4 +1,6 @@
 import { type ReactElement } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useLocation } from 'react-router-dom';
 
 import Footer from '@/layouts/parts/Footer';
 import Header from '@/layouts/parts/Header';
@@ -28,10 +30,23 @@ interface RootLayoutProps {
 }
 
 export default function RootLayout({ children }: RootLayoutProps) {
+  const location = useLocation();
+
   return (
     <Website>
       <Header />
-      {children}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.main
+          key={location.pathname}
+          className="flex-1"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+        >
+          {children}
+        </motion.main>
+      </AnimatePresence>
       <Footer />
     </Website>
   );

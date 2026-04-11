@@ -5,6 +5,7 @@ import { BarChart3, Users, Terminal, FileText, ArrowLeft, Network } from 'lucide
 import { downloadRunExport, fetchRun } from '../lib/api-client';
 import type { PipelineResponse } from '../lib/api-client';
 import AgentNetworkGraph from '../components/AgentNetworkGraph';
+import ThemeAnimatedBackground from '@/components/ThemeAnimatedBackground';
 
 const STANCE_COLORS: Record<string, string> = {
   strongly_for: '#00ff88',
@@ -385,7 +386,10 @@ export default function ResultsPage() {
   return (
     <>
       <title>Simulation Results — SynSoc AI</title>
-      <div className="container mx-auto px-4 py-10 max-w-7xl">
+      <section className="relative min-h-screen overflow-hidden">
+      <ThemeAnimatedBackground className="fixed inset-0" />
+
+      <div className="relative z-10 container mx-auto px-4 py-10 max-w-7xl">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <button onClick={() => navigate('/simulate')}
             className="flex items-center gap-1.5 text-xs mb-6 transition-opacity hover:opacity-70"
@@ -947,6 +951,7 @@ export default function ResultsPage() {
           )}
         </motion.div>
       </div>
+      </section>
     </>
   );
 }

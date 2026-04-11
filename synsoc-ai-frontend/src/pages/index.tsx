@@ -2,33 +2,10 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Brain, Network, BarChart3 } from 'lucide-react';
+import ThemeAnimatedBackground from '@/components/ThemeAnimatedBackground';
+import HomeAuthPanel from '@/components/HomeAuthPanel';
 
-// Animated grid background
-function GridBackground() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <svg
-        className="absolute inset-0 w-full h-full opacity-[0.07]"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#00ff88" strokeWidth="0.5" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
-      </svg>
-      {/* Radial fade overlay */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse at center, transparent 30%, #0a0a0a 80%)',
-        }}
-      />
-    </div>
-  );
-}
+const MotionLink = motion(Link);
 
 // Typing cursor animation for headline
 function TypingHeadline() {
@@ -96,9 +73,11 @@ export default function HomePage() {
         content="SynSoc AI uses multi-agent simulation to model societal dynamics and predict outcomes for complex topics."
       />
 
+      <div className="relative overflow-hidden">
+        <ThemeAnimatedBackground className="fixed inset-0" />
+
       {/* Hero */}
-      <section className="relative min-h-[calc(100vh-4rem)] flex items-center justify-center overflow-hidden">
-        <GridBackground />
+      <section className="relative z-10 min-h-[calc(100vh-4rem)] flex items-center justify-center overflow-hidden">
 
         <div className="relative z-10 container mx-auto px-4 text-center max-w-4xl">
           <motion.div
@@ -146,9 +125,11 @@ export default function HomePage() {
             transition={{ duration: 0.6, delay: 2.1, ease: 'easeOut' }}
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
-            <Link
+            <MotionLink
               to="/simulate"
-              className="group inline-flex items-center gap-2 px-8 py-3 rounded-md font-bold text-sm transition-all duration-300"
+              whileHover={{ scale: 1.04, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              className="group inline-flex items-center gap-2 px-8 py-3 rounded-md font-bold text-sm"
               style={{
                 fontFamily: 'var(--font-heading)',
                 background: 'hsl(var(--primary))',
@@ -166,10 +147,12 @@ export default function HomePage() {
             >
               Start Simulation
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-            </Link>
-            <Link
+            </MotionLink>
+            <MotionLink
               to="/about"
-              className="inline-flex items-center gap-2 px-8 py-3 rounded-md font-bold text-sm transition-all duration-300 border"
+              whileHover={{ scale: 1.04, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              className="inline-flex items-center gap-2 px-8 py-3 rounded-md font-bold text-sm border"
               style={{
                 fontFamily: 'var(--font-heading)',
                 color: 'hsl(var(--muted-foreground))',
@@ -185,8 +168,10 @@ export default function HomePage() {
               }}
             >
               Learn More
-            </Link>
+            </MotionLink>
           </motion.div>
+
+          <HomeAuthPanel />
         </div>
 
         {/* Bottom fade */}
@@ -197,7 +182,7 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
-      <section className="py-24 container mx-auto px-4">
+      <section className="relative z-10 py-24 container mx-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -261,7 +246,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA Banner */}
-      <section className="py-16 container mx-auto px-4">
+      <section className="relative z-10 py-16 container mx-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -292,9 +277,11 @@ export default function HomePage() {
           >
             Configure agents, set the stage, and let the simulation begin.
           </p>
-          <Link
+          <MotionLink
             to="/simulate"
-            className="group inline-flex items-center gap-2 px-8 py-3 rounded-md font-bold text-sm transition-all duration-300 relative z-10"
+            whileHover={{ scale: 1.04, y: -1 }}
+            whileTap={{ scale: 0.97 }}
+            className="group inline-flex items-center gap-2 px-8 py-3 rounded-md font-bold text-sm relative z-10"
             style={{
               fontFamily: 'var(--font-heading)',
               background: 'hsl(var(--primary))',
@@ -304,9 +291,10 @@ export default function HomePage() {
           >
             Configure Simulation
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-          </Link>
+          </MotionLink>
         </motion.div>
       </section>
+      </div>
     </>
   );
 }

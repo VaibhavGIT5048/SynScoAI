@@ -2,10 +2,6 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import * as esbuild from "esbuild";
-import sourceMapperPlugin from "./source-mapper/src/index";
-import { devToolsPlugin } from "./dev-tools/src/vite-plugin";
-import { fullStoryPlugin } from "./fullstory-plugin";
-import { errorInterceptorPlugin } from "./dev-tools/src/vite-error-interceptor";
 import apiRoutes from "vite-plugin-api-routes";
 
 function extractHostname(value: string): string {
@@ -71,22 +67,18 @@ if (corsOrigins.length === 0) {
 	corsOrigins.push("*");
 }
 
+const backendApiTarget =
+	process.env.VITE_API_BASE_URL || process.env.BACKEND_API_URL || "http://127.0.0.1:8000";
+
 export default defineConfig(({ mode }) => ({
 	plugins: [
-		react({
-			babel: {
-				plugins: [sourceMapperPlugin],
-			},
-		}),
+		react(),
 		apiRoutes({
 			mode: "isolated",
 			configure: "src/server/configure.js",
 			dirs: [{ dir: "./src/server/api", route: "" }],
 			forceRestart: mode === "development",
 		}),
-		...(mode === "development"
-			? [devToolsPlugin() as Plugin, fullStoryPlugin(), errorInterceptorPlugin()]
-			: []),
 		serverBundlePlugin(),
 	],
 
@@ -103,6 +95,14 @@ export default defineConfig(({ mode }) => ({
 		host: process.env.HOST || "0.0.0.0",
 		port: parseInt(process.env.PORT || "5173"),
 		strictPort: !!process.env.PORT,
+		proxy: {
+			"/api": {
+				target: backendApiTarget,
+				changeOrigin: true,
+				secure: false,
+				rewrite: (urlPath) => urlPath.replace(/^\/api/, ""),
+			},
+		},
 		allowedHosts,
 		cors: {
 			origin: corsOrigins,
@@ -122,6 +122,14 @@ export default defineConfig(({ mode }) => ({
 		host: process.env.HOST || "0.0.0.0",
 		port: parseInt(process.env.PORT || "5173"),
 		strictPort: !!process.env.PORT,
+		proxy: {
+			"/api": {
+				target: backendApiTarget,
+				changeOrigin: true,
+				secure: false,
+				rewrite: (urlPath) => urlPath.replace(/^\/api/, ""),
+			},
+		},
 		allowedHosts,
 		cors: {
 			origin: corsOrigins,

@@ -1,12 +1,77 @@
 import { getSupabaseAccessToken } from './supabase-auth';
 
-const rawApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
-if (!rawApiBase) {
-  throw new Error('Missing required environment variable: VITE_API_BASE_URL');
+const LOCAL_BACKEND_FALLBACK = 'http://127.0.0.1:8000';
+
+function isLocalBrowserHost(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1';
 }
 
-const API_BASE = rawApiBase.replace(/\/+$/, '');
+function resolveApiBase(): string {
+  const explicitBase = import.meta.env.VITE_API_BASE_URL?.trim() || import.meta.env.VITE_API_URL?.trim();
+  if (explicitBase) {
+    return explicitBase.replace(/\/+$/, '');
+  }
+
+  if (import.meta.env.DEV && isLocalBrowserHost()) {
+    console.warn(
+      `VITE_API_BASE_URL is not set. Falling back to local backend at ${LOCAL_BACKEND_FALLBACK}.`
+    );
+    return LOCAL_BACKEND_FALLBACK;
+  }
+
+  if (import.meta.env.DEV) {
+    console.warn(
+      'VITE_API_BASE_URL is not set. Falling back to /api and expecting Vite dev proxy to forward to backend.'
+    );
+    return '/api';
+  }
+
+  console.warn('VITE_API_BASE_URL is not set. Falling back to /api.');
+  return '/api';
+}
+
+const API_BASE = resolveApiBase();
 const VISITOR_ID_STORAGE_KEY = 'synsoc_visitor_id';
+
+async function performRequest(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    if (API_BASE.startsWith('http')) {
+      throw new Error(
+        `Unable to reach backend at ${API_BASE}. Ensure FastAPI is running and VITE_API_BASE_URL is correct.`
+      );
+    }
+
+    throw new Error(
+      'Unable to reach backend API. Ensure the backend is running and VITE_API_BASE_URL is configured.'
+    );
+  }
+}
+
+async function extractErrorDetail(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json().catch(() => null)) as
+      | { detail?: unknown }
+      | null;
+
+    if (typeof payload?.detail === 'string' && payload.detail.trim()) {
+      return payload.detail;
+    }
+  }
+
+  if (response.status === 404 && API_BASE === '/api') {
+    return 'Backend API is not reachable through /api. Ensure the backend is running and Vite dev proxy is enabled.';
+  }
+
+  return `HTTP ${response.status}`;
+}
 
 function getVisitorId(): string {
   if (typeof window === 'undefined') {
@@ -149,15 +214,14 @@ export interface RunPayload {
 }
 
 export async function runPipeline(request: PipelineRequest): Promise<PipelineResponse> {
-  const response = await fetch(`${API_BASE}/pipeline`, {
+  const response = await performRequest(`${API_BASE}/pipeline`, {
     method: 'POST',
     headers: await jsonHeaders(),
     body: JSON.stringify(request),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    throw new Error(await extractErrorDetail(response));
   }
 
   return response.json();
@@ -172,7 +236,7 @@ export function streamPipeline(
   (async () => {
     try {
       const headers = await jsonHeaders();
-      const response = await fetch(`${API_BASE}/pipeline/stream`, {
+      const response = await performRequest(`${API_BASE}/pipeline/stream`, {
         method: 'POST',
         headers,
         body: JSON.stringify(request),
@@ -180,8 +244,7 @@ export function streamPipeline(
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
-        onEvent('error', { message: error.detail || `HTTP ${response.status}` });
+        onEvent('error', { message: await extractErrorDetail(response) });
         return;
       }
 
@@ -225,32 +288,30 @@ export function streamPipeline(
 }
 
 export async function checkHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE}/health`, { headers: await visitorHeaders() });
+  const response = await performRequest(`${API_BASE}/health`, { headers: await visitorHeaders() });
   if (!response.ok) throw new Error('Health check failed');
   return response.json();
 }
 
 export async function fetchRun(runId: string): Promise<RunPayload> {
-  const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}`, {
+  const response = await performRequest(`${API_BASE}/runs/${encodeURIComponent(runId)}`, {
     headers: await visitorHeaders(),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    throw new Error(await extractErrorDetail(response));
   }
 
   return response.json();
 }
 
 export async function downloadRunExport(runId: string, format: 'pdf' | 'docx'): Promise<Blob> {
-  const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}/export/${format}`, {
+  const response = await performRequest(`${API_BASE}/runs/${encodeURIComponent(runId)}/export/${format}`, {
     headers: await visitorHeaders(),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    throw new Error(await extractErrorDetail(response));
   }
 
   return response.blob();

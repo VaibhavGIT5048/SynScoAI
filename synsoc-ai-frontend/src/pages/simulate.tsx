@@ -4,13 +4,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Play, Info } from 'lucide-react';
 import * as d3 from 'd3';
 import { streamPipeline } from '../lib/api-client';
-import {
-  getSupabaseUserEmail,
-  isSupabaseAuthConfigured,
-  signInWithSupabasePassword,
-  signOutFromSupabase,
-  subscribeSupabaseAuth,
-} from '../lib/supabase-auth';
 import type { GraphNode, GraphEdge, Agent, SimulationTurn } from '../lib/api-client';
 
 const STANCE_COLORS: Record<string, string> = {
@@ -108,10 +101,6 @@ export default function SimulatePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMsg, setStatusMsg] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
-  const [authEmail, setAuthEmail] = useState<string | null>(null);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authForm, setAuthForm] = useState({ email: '', password: '' });
   const [lastRunId, setLastRunId] = useState<string | null>(() => {
     if (typeof window === 'undefined') {
       return null;
@@ -141,7 +130,6 @@ export default function SimulatePage() {
   }, {});
 
   const [sections, setSections] = useState({ legend: true, roster: true, timeline: true });
-  const supabaseAuthConfigured = isSupabaseAuthConfigured();
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -162,70 +150,6 @@ export default function SimulatePage() {
   useEffect(() => {
     agentsRef.current = agents;
   }, [agents]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!supabaseAuthConfigured) {
-      return () => undefined;
-    }
-
-    getSupabaseUserEmail()
-      .then((email) => {
-        if (!cancelled) {
-          setAuthEmail(email);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAuthEmail(null);
-        }
-      });
-
-    const unsubscribe = subscribeSupabaseAuth((email) => {
-      if (!cancelled) {
-        setAuthEmail(email);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [supabaseAuthConfigured]);
-
-  const handleAuthSignIn = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    setAuthError(null);
-    setAuthBusy(true);
-
-    try {
-      const email = await signInWithSupabasePassword(authForm.email.trim(), authForm.password);
-      setAuthEmail(email);
-      setAuthForm((prev) => ({ ...prev, password: '' }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Sign in failed.';
-      setAuthError(message);
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  const handleAuthSignOut = async () => {
-    setAuthError(null);
-    setAuthBusy(true);
-
-    try {
-      await signOutFromSupabase();
-      setAuthEmail(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Sign out failed.';
-      setAuthError(message);
-    } finally {
-      setAuthBusy(false);
-    }
-  };
 
   const resetNodeStyles = useCallback(() => {
     if (!svgRef.current) return;
@@ -1061,83 +985,6 @@ export default function SimulatePage() {
               </div>
             )}
             <div className="rounded-xl border p-8" style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--primary) / 0.2)' }}>
-              <div className="mb-6 rounded-md border p-4" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
-                <p className="text-xs font-bold tracking-wider uppercase mb-2"
-                  style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>
-                  Auth
-                </p>
-
-                {!supabaseAuthConfigured && (
-                  <p className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Supabase auth is not configured in frontend env, so simulations will be treated as public runs.
-                  </p>
-                )}
-
-                {supabaseAuthConfigured && authEmail && (
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                      Signed in as <span style={{ color: 'hsl(var(--foreground))' }}>{authEmail}</span>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleAuthSignOut}
-                      disabled={authBusy}
-                      className="px-3 py-2 rounded-md text-xs font-bold"
-                      style={{
-                        background: '#191919',
-                        color: '#d6d6d6',
-                        opacity: authBusy ? 0.7 : 1,
-                        fontFamily: 'var(--font-sans)',
-                      }}
-                    >
-                      {authBusy ? 'Signing out...' : 'Sign out'}
-                    </button>
-                  </div>
-                )}
-
-                {supabaseAuthConfigured && !authEmail && (
-                  <form onSubmit={handleAuthSignIn} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
-                    <input
-                      type="email"
-                      placeholder="Email"
-                      value={authForm.email}
-                      onChange={(event) => setAuthForm((prev) => ({ ...prev, email: event.target.value }))}
-                      className="px-3 py-2 rounded-md border text-sm"
-                      style={inputStyle('auth_email')}
-                      required
-                    />
-                    <input
-                      type="password"
-                      placeholder="Password"
-                      value={authForm.password}
-                      onChange={(event) => setAuthForm((prev) => ({ ...prev, password: event.target.value }))}
-                      className="px-3 py-2 rounded-md border text-sm"
-                      style={inputStyle('auth_password')}
-                      required
-                    />
-                    <button
-                      type="submit"
-                      disabled={authBusy}
-                      className="px-3 py-2 rounded-md text-xs font-bold"
-                      style={{
-                        background: 'hsl(var(--primary))',
-                        color: '#0a0a0a',
-                        opacity: authBusy ? 0.7 : 1,
-                        fontFamily: 'var(--font-sans)',
-                      }}
-                    >
-                      {authBusy ? 'Signing in...' : 'Sign in'}
-                    </button>
-                  </form>
-                )}
-
-                {authError && (
-                  <p className="text-xs mt-2" style={{ color: '#ef4444' }}>
-                    {authError}
-                  </p>
-                )}
-              </div>
-
               <form onSubmit={handleSubmit} className="flex flex-col gap-7">
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold tracking-wider uppercase"

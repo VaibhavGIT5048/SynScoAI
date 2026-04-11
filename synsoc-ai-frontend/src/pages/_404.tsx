@@ -1,4 +1,5 @@
 import { Link } from '../router';
+import ThemeAnimatedBackground from '@/components/ThemeAnimatedBackground';
 
 /**
  * 404 Not Found page component
@@ -9,7 +10,9 @@ import { Link } from '../router';
  */
 export default function NotFoundPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, hsl(var(--primary)), hsl(var(--secondary)))' }}>
+    <section className="relative min-h-screen overflow-hidden">
+    <ThemeAnimatedBackground className="fixed inset-0" />
+    <div className="relative z-10 min-h-screen flex items-center justify-center">
     <div className="container mx-auto px-4 max-w-2xl text-center">
       <div className="space-y-8">
         <div className="space-y-4">
@@ -31,5 +34,6 @@ export default function NotFoundPage() {
       </div>
     </div>
   </div>
+  </section>
   );
 }

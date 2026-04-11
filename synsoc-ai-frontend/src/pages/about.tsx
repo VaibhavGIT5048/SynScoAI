@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { Settings, Cpu, LineChart, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import ThemeAnimatedBackground from '@/components/ThemeAnimatedBackground';
 
 const steps = [
   {
@@ -58,7 +59,10 @@ export default function AboutPage() {
         content="Learn about SynSoc AI — the multi-agent simulation platform for modeling societal dynamics and predicting outcomes."
       />
 
-      <div className="container mx-auto px-4 py-16 max-w-3xl">
+      <section className="relative overflow-hidden">
+        <ThemeAnimatedBackground className="fixed inset-0" />
+
+      <div className="relative z-10 container mx-auto px-4 py-16 max-w-3xl">
         {/* Hero */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -259,6 +263,7 @@ export default function AboutPage() {
           </Link>
         </motion.div>
       </div>
+      </section>
     </>
   );
 }

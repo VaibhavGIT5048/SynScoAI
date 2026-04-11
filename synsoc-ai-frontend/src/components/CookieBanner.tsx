@@ -27,7 +27,7 @@ function initC2Tracking(): void {
   const track = (eid: string, type: string, label: string, props?: Record<string, unknown>) => {
     window._signalsDataLayer!.push({
       schema: 'add_event', version: 'v1',
-      data: { eid, type, event_label: label, custom_properties: { ...props, timestamp: new Date().toISOString(), source: 'airo-app-builder' } }
+      data: { eid, type, event_label: label, custom_properties: { ...props, timestamp: new Date().toISOString(), source: 'synsoc-ai' } }
     });
   };
 
@@ -45,8 +45,8 @@ function initC2Tracking(): void {
   };
 
   // Initial events
-  track('airo.website.session', 'session', 'start', { page_path: location.pathname, referrer: document.referrer });
-  track('airo.website.pageview', 'pageview', document.title, { page_path: location.pathname, referrer: document.referrer });
+  track('synsoc.website.session', 'session', 'start', { page_path: location.pathname, referrer: document.referrer });
+  track('synsoc.website.pageview', 'pageview', document.title, { page_path: location.pathname, referrer: document.referrer });
 
   // Click tracking
   // Capture phase (true) ensures we track clicks even if event.stopPropagation() is called
@@ -66,7 +66,7 @@ function initC2Tracking(): void {
       }
     }
 
-    track('airo.website.click', 'click', text || type, {
+    track('synsoc.website.click', 'click', text || type, {
       element_type: type,
       element_text: text,
       element_id: el.id || undefined,
@@ -84,7 +84,7 @@ function initC2Tracking(): void {
   let lastUrl = location.href;
   const trackPage = () => {
     if (location.href !== lastUrl) {
-      track('airo.website.pageview', 'pageview', document.title, { page_path: location.pathname, referrer: lastUrl });
+      track('synsoc.website.pageview', 'pageview', document.title, { page_path: location.pathname, referrer: lastUrl });
       lastUrl = location.href;
     }
   };
@@ -95,9 +95,9 @@ function initC2Tracking(): void {
 
   // Load SCC script
   const h = location.hostname;
-  const url = h === 'localhost' || h.includes('dev-airoapp')
+  const url = h === 'localhost' || h.includes('dev-synsoc')
     ? 'https://img1.dev-wsimg.com/signals/js/clients/scc-c2/scc-c2.js'
-    : h.includes('test-airoapp')
+    : h.includes('test-synsoc')
       ? 'https://img1.test-wsimg.com/signals/js/clients/scc-c2/scc-c2.min.js'
       : 'https://img1.wsimg.com/signals/js/clients/scc-c2/scc-c2.min.js';
   const script = document.createElement('script');
