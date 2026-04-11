@@ -36,3 +36,7 @@ coverage/
 .vscode/
 # Local Netlify folder
 .netlify
+
+# Local validation/temp artifacts
+.tmp-ownership-check.sh
+supabase/.temp/
