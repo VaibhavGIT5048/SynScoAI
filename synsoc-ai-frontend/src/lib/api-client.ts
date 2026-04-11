@@ -1,3 +1,5 @@
+import { getSupabaseAccessToken } from './supabase-auth';
+
 const rawApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
 if (!rawApiBase) {
   throw new Error('Missing required environment variable: VITE_API_BASE_URL');
@@ -25,17 +27,31 @@ function getVisitorId(): string {
   return generated;
 }
 
-function jsonHeaders(): HeadersInit {
-  return {
+async function jsonHeaders(): Promise<HeadersInit> {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Visitor-Id': getVisitorId(),
   };
+
+  const accessToken = await getSupabaseAccessToken();
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return headers;
 }
 
-function visitorHeaders(): HeadersInit {
-  return {
+async function visitorHeaders(): Promise<HeadersInit> {
+  const headers: Record<string, string> = {
     'X-Visitor-Id': getVisitorId(),
   };
+
+  const accessToken = await getSupabaseAccessToken();
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return headers;
 }
 
 export interface GraphNode {
@@ -135,7 +151,7 @@ export interface RunPayload {
 export async function runPipeline(request: PipelineRequest): Promise<PipelineResponse> {
   const response = await fetch(`${API_BASE}/pipeline`, {
     method: 'POST',
-    headers: jsonHeaders(),
+    headers: await jsonHeaders(),
     body: JSON.stringify(request),
   });
 
@@ -155,9 +171,10 @@ export function streamPipeline(
 
   (async () => {
     try {
+      const headers = await jsonHeaders();
       const response = await fetch(`${API_BASE}/pipeline/stream`, {
         method: 'POST',
-        headers: jsonHeaders(),
+        headers,
         body: JSON.stringify(request),
         signal: controller.signal,
       });
@@ -208,14 +225,14 @@ export function streamPipeline(
 }
 
 export async function checkHealth(): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE}/health`, { headers: visitorHeaders() });
+  const response = await fetch(`${API_BASE}/health`, { headers: await visitorHeaders() });
   if (!response.ok) throw new Error('Health check failed');
   return response.json();
 }
 
 export async function fetchRun(runId: string): Promise<RunPayload> {
   const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}`, {
-    headers: visitorHeaders(),
+    headers: await visitorHeaders(),
   });
 
   if (!response.ok) {
@@ -228,7 +245,7 @@ export async function fetchRun(runId: string): Promise<RunPayload> {
 
 export async function downloadRunExport(runId: string, format: 'pdf' | 'docx'): Promise<Blob> {
   const response = await fetch(`${API_BASE}/runs/${encodeURIComponent(runId)}/export/${format}`, {
-    headers: visitorHeaders(),
+    headers: await visitorHeaders(),
   });
 
   if (!response.ok) {

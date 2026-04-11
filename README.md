@@ -236,12 +236,15 @@ Open http://localhost:5173
 | `SUPABASE_JWT_SECRET` | ❌ | `your-jwt-secret` | Enables JWT verification for run ownership enforcement |
 | `SUPABASE_JWT_AUDIENCE` | ❌ | `authenticated` | Expected token audience for Supabase access tokens |
 | `SUPABASE_JWT_ISSUER` | ❌ | `https://<project-ref>.supabase.co/auth/v1` | Optional issuer validation for Supabase tokens |
+| `SUPABASE_SERVICE_ROLE_KEY` | ❌ | `eyJ...` | Fallback for token introspection when JWT secret is not configured |
 
 ### Frontend (`synsoc-ai-frontend/.env`)
 
 | Variable | Required | Example |
 |---|---|---|
 | `VITE_API_BASE_URL` | ✅ | `http://localhost:8000` |
+| `VITE_SUPABASE_URL` | ❌ | `https://<project-ref>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | ❌ | `eyJ...` |
 
 ---
 

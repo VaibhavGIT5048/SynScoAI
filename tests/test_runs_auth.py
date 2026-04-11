@@ -42,7 +42,7 @@ async def test_get_run_owned_payload_requires_same_user(monkeypatch: pytest.Monk
     async def fake_get_pipeline_run(run_id: str):
         return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
 
-    def fake_get_request_user_id(request, *, required: bool):
+    async def fake_get_request_user_id(request, *, required: bool):
         assert required is True
         return "user-2"
 
@@ -63,7 +63,7 @@ async def test_get_run_owned_payload_missing_token_returns_401(monkeypatch: pyte
     async def fake_get_pipeline_run(run_id: str):
         return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
 
-    def fake_get_request_user_id(request, *, required: bool):
+    async def fake_get_request_user_id(request, *, required: bool):
         assert required is True
         raise HTTPException(status_code=401, detail="Missing bearer token.")
 
@@ -84,7 +84,7 @@ async def test_export_pdf_owned_payload_requires_access(monkeypatch: pytest.Monk
     async def fake_get_pipeline_run(run_id: str):
         return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
 
-    def fake_get_request_user_id(request, *, required: bool):
+    async def fake_get_request_user_id(request, *, required: bool):
         assert required is True
         return "user-1"
 
@@ -111,7 +111,7 @@ async def test_export_docx_owned_payload_requires_access(monkeypatch: pytest.Mon
     async def fake_get_pipeline_run(run_id: str):
         return {"run_id": run_id, "owner_id": "user-1", "result": {"topic": "owned"}}
 
-    def fake_get_request_user_id(request, *, required: bool):
+    async def fake_get_request_user_id(request, *, required: bool):
         assert required is True
         return "user-1"
 

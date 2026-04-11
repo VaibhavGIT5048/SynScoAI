@@ -93,7 +93,7 @@ async def run_pipeline(http_request: Request, request: PipelineRequest) -> Pipel
 @router.post("/stream")
 async def stream_pipeline(http_request: Request, request: PipelineRequest):
     await enforce_ip_rate_limit(http_request)
-    owner_id = get_request_user_id(http_request, required=False)
+    owner_id = await get_request_user_id(http_request, required=False)
     visitor = await reserve_visitor_simulation_slot(http_request)
     deadline = time.monotonic() + settings.request_timeout_seconds
     run_id = create_run_id()

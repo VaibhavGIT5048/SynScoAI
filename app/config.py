@@ -109,6 +109,7 @@ class Settings:
     supabase_jwt_secret: Optional[str]
     supabase_jwt_audience: Optional[str]
     supabase_jwt_issuer: Optional[str]
+    supabase_service_role_key: Optional[str]
 
 
 _OPENAI_MODEL = _read_required("OPENAI_MODEL")
@@ -140,4 +141,5 @@ settings = Settings(
     supabase_jwt_secret=_read_optional("SUPABASE_JWT_SECRET"),
     supabase_jwt_audience=_read_optional("SUPABASE_JWT_AUDIENCE"),
     supabase_jwt_issuer=_read_optional("SUPABASE_JWT_ISSUER"),
+    supabase_service_role_key=_read_optional("SUPABASE_SERVICE_ROLE_KEY"),
 )
