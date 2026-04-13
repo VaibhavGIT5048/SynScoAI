@@ -17,7 +17,12 @@ export default function ThemeAnimatedBackground({ className = '' }: ThemeAnimate
     const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 100);
     camera.position.z = 14;
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    } catch {
+      return undefined;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     const geometry = new THREE.BufferGeometry();
