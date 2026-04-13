@@ -231,8 +231,9 @@ Open http://localhost:5173
 | `MAX_INPUT_CHARS_CONTEXT` | ✅ | `4000` | Context field character limit |
 | `PIPELINE_STREAM_NODE_CONCURRENCY` | ❌ | `4` | Parallel node processing in stream mode |
 | `RUN_RESULT_TTL_SECONDS` | ❌ | `86400` | Persisted run retention TTL |
-| `DATABASE_URL` | ❌ | `postgresql://...` | Durable run storage backend (preferred over Redis/in-memory) |
-| `REDIS_URL` | ❌ | `redis://...` | Backing store for limits and run persistence |
+| `DATABASE_URL` | ✅ (prod) | `postgresql://...` | Supabase/Postgres backend for run persistence |
+| `REDIS_URL` | ✅ (prod) | `redis://...` | Redis backend for IP limits and simulation slot state |
+| `REQUIRE_PERSISTENT_URLS` | ❌ | `true` | Enforces required URL-backed stores (defaults to `true` on Railway production) |
 | `SUPABASE_JWT_SECRET` | ❌ | `your-jwt-secret` | Enables JWT verification for run ownership enforcement |
 | `SUPABASE_JWT_AUDIENCE` | ❌ | `authenticated` | Expected token audience for Supabase access tokens |
 | `SUPABASE_JWT_ISSUER` | ❌ | `https://<project-ref>.supabase.co/auth/v1` | Optional issuer validation for Supabase tokens |

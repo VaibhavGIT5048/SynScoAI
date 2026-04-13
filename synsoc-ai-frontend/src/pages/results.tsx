@@ -34,15 +34,27 @@ const EMOTION_COLORS: Record<string, string> = {
 
 type Tab = 'graph' | 'network' | 'agents' | 'transcript' | 'report';
 
-function computeConflictScore(turns: any[]): number {
-  if (!turns || turns.length === 0) return 0;
-  const stanceWeights: Record<string, number> = {
-    strongly_for: 1, for: 0.5, neutral: 0, against: -0.5, strongly_against: -1,
-  };
-  const scores = turns.map((t) => stanceWeights[t.stance] ?? 0);
-  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-  const variance = scores.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / scores.length;
-  return Math.min(1, Math.sqrt(variance));
+function normalizeScore(value: number | undefined): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+function uniqueTextList(items: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const item of items) {
+    const normalized = item.replace(/\s+/g, ' ').trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(normalized);
+  }
+
+  return unique;
 }
 
 function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
@@ -91,7 +103,7 @@ function ConflictGauge({ score }: { score: number }) {
   useEffect(() => { const t = setTimeout(() => setAnimated(score), 300); return () => clearTimeout(t); }, [score]);
   const angle = animated * 180 - 90;
   const color = score < 0.3 ? '#00ff88' : score < 0.6 ? '#ffaa00' : score < 0.8 ? '#ff6644' : '#ff2222';
-  const label = score < 0.3 ? 'Low' : score < 0.5 ? 'Moderate' : score < 0.75 ? 'High' : 'Extreme';
+  const label = score < 0.3 ? 'Low' : score < 0.6 ? 'Moderate' : score < 0.8 ? 'High' : 'Extreme';
   return (
     <div className="flex flex-col items-center">
       <svg width="200" height="110" viewBox="0 0 200 110">
@@ -321,36 +333,19 @@ export default function ResultsPage() {
   }
 
   const { graph, agents, simulation, report } = data;
-  const dynamicConflictScore = computeConflictScore(simulation.turns);
-  const conflictMeta = getConflictMeta(dynamicConflictScore);
+  const backendConflictScore = normalizeScore(report.conflict_score);
+  const conflictMeta = getConflictMeta(backendConflictScore);
   const graphNodeLabelById = graph.nodes.reduce((acc: Record<string, string>, node) => {
     acc[node.id] = node.label;
     return acc;
   }, {});
   const agentNames = agents.agents.map((agent) => agent.name);
-  const summaryLead = firstSentence(report.predicted_outcome) || firstSentence(report.executive_summary) || report.executive_summary;
-  const compromiseLead = report.consensus_areas[0] ?? report.policy_recommendations[0] ?? 'Conditional compromise remains the likely landing zone.';
-
-  const visualSummary = [
-    {
-      label: 'Dominant outcome',
-      title: summaryLead,
-      accent: 'hsl(var(--primary))',
-      footnote: `${simulation.total_turns} turns · ${simulation.total_rounds} rounds`,
-    },
-    {
-      label: 'Conflict',
-      title: `${dynamicConflictScore.toFixed(2)} / 1.0`,
-      accent: conflictMeta.color,
-      footnote: conflictMeta.label,
-    },
-    {
-      label: 'Compromise path',
-      title: clampText(compromiseLead, 120),
-      accent: '#00ff88',
-      footnote: 'Most repeatable common ground',
-    },
-  ];
+  const summaryLead = firstSentence(report.executive_summary) || firstSentence(report.predicted_outcome) || report.executive_summary;
+  const consensusAreas = uniqueTextList(report.consensus_areas);
+  const policyRecommendations = uniqueTextList(report.policy_recommendations);
+  const compromisePathItems = uniqueTextList([...consensusAreas, ...policyRecommendations]).slice(0, 4);
+  const compromiseLead = compromisePathItems[0] ?? 'Most participants preferred a phased rollout with safeguards first.';
+  const compromiseDetails = compromisePathItems.slice(1, 4);
 
   const evidenceCards = report.key_findings.map((finding, index) => {
     const names = agentNames.filter((name) => finding.includes(name)).slice(0, 3);
@@ -365,7 +360,7 @@ export default function ResultsPage() {
     };
   });
 
-  const recommendationBuckets = report.policy_recommendations.reduce<Record<RecommendationBucket, string[]>>(
+  const recommendationBuckets = policyRecommendations.reduce<Record<RecommendationBucket, string[]>>(
     (acc, recommendation) => {
       acc[classifyRecommendation(recommendation)].push(recommendation);
       return acc;
@@ -392,11 +387,36 @@ export default function ResultsPage() {
   );
 
   const scenarioLadder = [
-    { year: 'Year 1', title: 'Evidence gate hardens', note: 'Audit-grade proof becomes the baseline demand.', color: '#ff6644' },
-    { year: 'Year 2', title: 'Restriction camp consolidates', note: 'High-risk uses face sharper screening and more refusal pressure.', color: '#ffaa00' },
-    { year: 'Year 3', title: 'Function-test debate intensifies', note: 'Narrow tailoring survives only where it can be proven end-to-end.', color: '#888888' },
-    { year: 'Year 4', title: 'Conditional carve-outs emerge', note: 'Some uses remain possible only with non-waivable gates and audit trails.', color: '#00cc66' },
-    { year: 'Year 5', title: 'Procurement standard settles', note: 'The regime converges around verifiable accountability and enforcement.', color: '#00ff88' },
+    {
+      year: 'Year 1',
+      title: 'Start with low-risk steps',
+      note: firstSentence(compromiseLead) || 'Begin with actions that have the least backlash.',
+      color: '#ff6644',
+    },
+    {
+      year: 'Year 2',
+      title: 'Add legal safeguards',
+      note: firstSentence(policyRecommendations[0] ?? '') || 'Add legal aid, due process, and clear appeal paths.',
+      color: '#ffaa00',
+    },
+    {
+      year: 'Year 3',
+      title: 'Measure real impact',
+      note: firstSentence(policyRecommendations[1] ?? '') || 'Track measurable impact and adjust weak parts.',
+      color: '#888888',
+    },
+    {
+      year: 'Year 4',
+      title: 'Expand only where safe',
+      note: firstSentence(consensusAreas[0] ?? '') || 'Expand only where safeguards are working in practice.',
+      color: '#00cc66',
+    },
+    {
+      year: 'Year 5',
+      title: 'Standardize what worked',
+      note: firstSentence(consensusAreas[1] ?? '') || 'Make stable rules from what repeatedly worked.',
+      color: '#00ff88',
+    },
   ];
 
   const stanceCounts = agents.agents.reduce((acc: Record<string, number>, a: any) => {
@@ -546,13 +566,13 @@ export default function ResultsPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h2 className="text-sm font-bold" style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>Conflict Score</h2>
-                    <p className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>Measure of agent opinion divergence</p>
+                    <p className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>Backend-calculated spread of disagreement across all turns</p>
                   </div>
-                  <span className="text-2xl font-bold" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>{dynamicConflictScore.toFixed(2)}</span>
+                  <span className="text-2xl font-bold" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>{backendConflictScore.toFixed(2)}</span>
                 </div>
                 <div className="h-2 rounded-full overflow-hidden" style={{ background: 'hsl(var(--border))' }}>
                   <div className="h-full rounded-full transition-all duration-1000"
-                    style={{ width: `${dynamicConflictScore * 100}%`, background: 'linear-gradient(90deg, #00ff88, #ff4444)' }} />
+                    style={{ width: `${backendConflictScore * 100}%`, background: 'linear-gradient(90deg, #00ff88, #ff4444)' }} />
                 </div>
                 <div className="flex justify-between mt-1">
                   <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>No conflict</span>
@@ -679,7 +699,7 @@ export default function ResultsPage() {
                     <div key={label} className="flex items-center justify-between px-4 py-2.5 rounded-lg border"
                       style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
                       <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>{label}</span>
-                      <span className="text-xs font-bold truncate max-w-[55%] text-right" style={{ color, fontFamily: 'var(--font-heading)' }}>{value}</span>
+                      <span className="text-xs font-bold max-w-[70%] text-right leading-relaxed break-words" style={{ color, fontFamily: 'var(--font-heading)' }}>{value}</span>
                     </div>
                   ))}
                 </div>
@@ -687,12 +707,12 @@ export default function ResultsPage() {
                   style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
                   <p className="text-xs font-bold tracking-widest uppercase mb-2"
                     style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Conflict Score</p>
-                  <ConflictGauge score={dynamicConflictScore} />
-                  <p className="text-xs text-center mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>Calculated from agent stance variance</p>
+                  <ConflictGauge score={backendConflictScore} />
+                  <p className="text-xs text-center mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>Source: backend deterministic score from all agent turns</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
                 <div className="p-5 rounded-xl border" style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
                   <p className="text-xs font-bold tracking-widest uppercase mb-4" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Agent Stances</p>
                   <DonutChart data={donutData} />
@@ -734,19 +754,19 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.9fr_1.2fr] gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.9fr_1.2fr] gap-4 items-start">
                 <div className="p-5 rounded-xl border flex flex-col gap-4" style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs font-bold tracking-widest uppercase" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Dominant Outcome</p>
                     <span className="text-[10px] px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--primary) / 0.2)', color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>
-                      visual summary
+                      what happened
                     </span>
                   </div>
                   <p className="text-lg font-bold leading-snug" style={{ color: 'hsl(var(--foreground))', fontFamily: 'var(--font-heading)' }}>
-                    {visualSummary[0].title}
+                    {summaryLead}
                   </p>
-                  <p className="text-sm leading-relaxed" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                    {clampText(report.executive_summary, 180)}
+                  <p className="text-sm leading-7" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                    {report.executive_summary}
                   </p>
                   <div className="flex flex-wrap gap-2 pt-1">
                     <span className="text-[10px] px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}>
@@ -756,7 +776,7 @@ export default function ResultsPage() {
                       {simulation.total_turns} turns
                     </span>
                     <span className="text-[10px] px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}>
-                      {report.consensus_areas.length} consensus signals
+                      {consensusAreas.length} consensus signals
                     </span>
                   </div>
                 </div>
@@ -764,15 +784,22 @@ export default function ResultsPage() {
                 <div className="p-5 rounded-xl border flex flex-col items-center justify-center text-center gap-4" style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
                   <p className="text-xs font-bold tracking-widest uppercase" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Conflict</p>
                   <div className="w-full flex justify-center">
-                    <ConflictGauge score={dynamicConflictScore} />
+                    <ConflictGauge score={backendConflictScore} />
                   </div>
                   <div className="w-full max-w-[240px]">
                     <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'hsl(var(--border))' }}>
-                      <div className="h-full rounded-full" style={{ width: `${dynamicConflictScore * 100}%`, background: conflictMeta.color }} />
+                      <div className="h-full rounded-full" style={{ width: `${backendConflictScore * 100}%`, background: conflictMeta.color }} />
                     </div>
                     <p className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
                       {conflictMeta.label} conflict · {conflictMeta.band}
                     </p>
+                  </div>
+                  <div className="w-full rounded-lg border p-3 text-left" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background) / 0.55)' }}>
+                    <p className="text-[11px] mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>How to read this score</p>
+                    <p className="text-[11px] leading-relaxed" style={{ color: 'hsl(var(--foreground))' }}>0.00-0.29: low disagreement, easy alignment.</p>
+                    <p className="text-[11px] leading-relaxed" style={{ color: 'hsl(var(--foreground))' }}>0.30-0.59: mixed views, needs negotiation.</p>
+                    <p className="text-[11px] leading-relaxed" style={{ color: 'hsl(var(--foreground))' }}>0.60-0.79: high disagreement, needs safeguards.</p>
+                    <p className="text-[11px] leading-relaxed" style={{ color: 'hsl(var(--foreground))' }}>0.80-1.00: extreme conflict, not ready for full rollout.</p>
                   </div>
                 </div>
 
@@ -784,12 +811,12 @@ export default function ResultsPage() {
                     </span>
                   </div>
                   <div className="rounded-xl border p-4" style={{ background: 'hsl(var(--primary) / 0.05)', borderColor: 'hsl(var(--primary) / 0.12)' }}>
-                    <p className="text-sm leading-relaxed" style={{ color: 'hsl(var(--foreground))' }}>
-                      {clampText(compromiseLead, 220)}
+                    <p className="text-sm leading-7" style={{ color: 'hsl(var(--foreground))' }}>
+                      {compromiseLead}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2">
-                    {report.consensus_areas.slice(0, 3).map((area: string, index: number) => (
+                    {compromiseDetails.map((area: string, index: number) => (
                       <div
                         key={index}
                         className="text-[11px] px-3 py-2 rounded-lg border leading-relaxed"
@@ -801,31 +828,31 @@ export default function ResultsPage() {
                           wordBreak: 'break-word',
                         }}
                       >
-                        {clampText(area, 220)}
+                        {area}
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
                 <div className="p-5 rounded-xl border" style={{ background: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}>
                   <div className="flex items-center justify-between mb-4 gap-3">
                     <div>
                       <p className="text-xs font-bold tracking-widest uppercase" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Policy Decision Matrix</p>
-                      <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>Must do, conditional, and avoid buckets</p>
+                      <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>Simple view: do now, do with conditions, or avoid</p>
                     </div>
                     <span className="text-[10px] px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}>
-                      {report.policy_recommendations.length} recommendations
+                      {policyRecommendations.length} recommendations
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
                     {(['must', 'conditional', 'avoid'] as RecommendationBucket[]).map((bucket) => {
                       const meta = {
-                        must: { label: 'Must do', color: '#00ff88', hint: 'Required actions' },
-                        conditional: { label: 'Conditional', color: '#ffaa00', hint: 'Only under proof' },
-                        avoid: { label: 'Avoid', color: '#ff4444', hint: 'Do not rely on this' },
+                        must: { label: 'Must do', color: '#00ff88', hint: 'Start with these actions' },
+                        conditional: { label: 'Conditional', color: '#ffaa00', hint: 'Do only with safeguards' },
+                        avoid: { label: 'Avoid', color: '#ff4444', hint: 'Do not depend on this path' },
                       }[bucket];
                       const items = recommendationBuckets[bucket];
 
@@ -847,7 +874,7 @@ export default function ResultsPage() {
                             {items.map((item, index) => (
                               <div key={`${bucket}-${index}`} className="rounded-lg border p-3" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background) / 0.55)' }}>
                                 <p className="text-xs leading-relaxed" style={{ color: 'hsl(var(--foreground))', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                  {clampText(item, 150)}
+                                  {item}
                                 </p>
                               </div>
                             ))}
@@ -862,14 +889,14 @@ export default function ResultsPage() {
                   <div className="flex items-center justify-between mb-4 gap-3">
                     <div>
                       <p className="text-xs font-bold tracking-widest uppercase" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Coalition Map</p>
-                      <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>Stakeholders grouped by final stance and influence</p>
+                      <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>Who supports, who is neutral, and who opposes</p>
                     </div>
                     <span className="text-[10px] px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}>
                       {report.stakeholder_insights.length} groups
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">
                     {coalitionCards.map((bucket) => (
                       <div key={bucket.bucket} className="rounded-xl border p-3 min-h-[260px]" style={{ borderColor: `${bucket.color}33`, background: `${bucket.color}0b` }}>
                         <div className="flex items-center justify-between mb-3 gap-2">
@@ -905,7 +932,7 @@ export default function ResultsPage() {
                                   <div className="h-full rounded-full" style={{ width: `${Math.max(6, insight.influence_score * 100)}%`, background: bucket.color }} />
                                 </div>
                                 <p className="text-xs leading-relaxed" style={{ color: 'hsl(var(--foreground))', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                  {clampText(insight.summary, 120)}
+                                  {insight.summary}
                                 </p>
                               </div>
                             );
@@ -974,7 +1001,7 @@ export default function ResultsPage() {
                 <div className="flex items-center justify-between mb-4 gap-3">
                   <div>
                     <p className="text-xs font-bold tracking-widest uppercase" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Scenario Ladder</p>
-                    <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>A visual read of how the simulated policy debate resolves over time</p>
+                    <p className="text-xs mt-1" style={{ color: 'hsl(var(--muted-foreground))' }}>Simple timeline of how implementation can happen safely</p>
                   </div>
                   <span className="text-[10px] px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--primary) / 0.2)', color: 'hsl(var(--primary))' }}>
                     forward view
@@ -998,9 +1025,9 @@ export default function ResultsPage() {
                 </div>
 
                 <div className="mt-4 rounded-xl border p-4" style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background) / 0.65)' }}>
-                  <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Predicted outcome text</p>
-                  <p className="text-sm leading-relaxed" style={{ color: 'hsl(var(--foreground))' }}>
-                    {clampText(report.predicted_outcome, 260)}
+                  <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: 'hsl(var(--primary))', fontFamily: 'var(--font-heading)' }}>Final verdict and overall summary</p>
+                  <p className="text-sm leading-7" style={{ color: 'hsl(var(--foreground))' }}>
+                    {report.predicted_outcome}
                   </p>
                 </div>
               </div>

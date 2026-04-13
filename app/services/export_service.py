@@ -21,9 +21,13 @@ def _iter_export_lines(result: PipelineResponse) -> list[str]:
         f"Rounds: {result.simulation.total_rounds}",
         f"Turns: {result.simulation.total_turns}",
         f"Agents: {result.agents.total_agents}",
+        f"Conflict Score: {result.report.conflict_score:.2f} / 1.0",
         "",
         "Executive Summary",
         result.report.executive_summary,
+        "",
+        "Final Verdict and Overall Summary",
+        result.report.predicted_outcome,
         "",
         "Key Findings",
     ]
@@ -84,9 +88,13 @@ def build_docx_bytes(run_payload: dict) -> bytes:
     doc.add_paragraph(f"Rounds: {result.simulation.total_rounds}")
     doc.add_paragraph(f"Turns: {result.simulation.total_turns}")
     doc.add_paragraph(f"Agents: {result.agents.total_agents}")
+    doc.add_paragraph(f"Conflict Score: {result.report.conflict_score:.2f} / 1.0")
 
     doc.add_heading("Executive Summary", level=2)
     doc.add_paragraph(result.report.executive_summary)
+
+    doc.add_heading("Final Verdict and Overall Summary", level=2)
+    doc.add_paragraph(result.report.predicted_outcome)
 
     doc.add_heading("Key Findings", level=2)
     for finding in result.report.key_findings:

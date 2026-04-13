@@ -10,11 +10,6 @@ from typing import Any
 from app.config import settings
 
 try:
-    import redis.asyncio as redis_asyncio
-except Exception:  # pragma: no cover - optional dependency import guard
-    redis_asyncio = None
-
-try:
     import asyncpg
 except Exception:  # pragma: no cover - optional dependency import guard
     asyncpg = None
@@ -55,29 +50,6 @@ class InMemoryRunStore(RunStore):
                 return None
 
             return payload
-
-
-class RedisRunStore(RunStore):
-    def __init__(self, redis_url: str) -> None:
-        if redis_asyncio is None:
-            raise RuntimeError("redis package is required for Redis-backed run store")
-
-        self._redis = redis_asyncio.from_url(redis_url, decode_responses=True)
-        self._prefix = "synsoc:run"
-
-    def _key(self, run_id: str) -> str:
-        return f"{self._prefix}:{run_id}"
-
-    async def save(self, run_id: str, payload: dict[str, Any], ttl_seconds: int) -> None:
-        key = self._key(run_id)
-        await self._redis.set(key, json.dumps(payload), ex=ttl_seconds)
-
-    async def get(self, run_id: str) -> dict[str, Any] | None:
-        key = self._key(run_id)
-        raw = await self._redis.get(key)
-        if not raw:
-            return None
-        return json.loads(raw)
 
 
 class PostgresRunStore(RunStore):
@@ -188,17 +160,17 @@ def _create_run_store() -> RunStore:
         try:
             logger.info("Using Postgres-backed run store")
             return PostgresRunStore(settings.database_url)
-        except Exception:
-            logger.exception(
-                "Failed to initialize Postgres run store, falling back to Redis/in-memory"
-            )
+        except Exception as exc:
+            logger.exception("Failed to initialize Postgres run store")
+            if settings.require_persistent_urls:
+                raise RuntimeError(
+                    "DATABASE_URL is configured but Postgres run store initialization failed."
+                ) from exc
 
-    if settings.redis_url:
-        try:
-            logger.info("Using Redis-backed run store")
-            return RedisRunStore(settings.redis_url)
-        except Exception:
-            logger.exception("Failed to initialize Redis run store, falling back to in-memory")
+    if settings.require_persistent_urls:
+        raise RuntimeError(
+            "DATABASE_URL is required for durable run persistence in this environment."
+        )
 
     logger.warning("Using in-memory run store; run persistence is process-local")
     return InMemoryRunStore()

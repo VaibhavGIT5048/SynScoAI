@@ -213,8 +213,17 @@ def _create_state_store() -> SimulationStateStore:
         try:
             logger.info("Using Redis-backed simulation state store")
             return RedisStateStore(settings.redis_url)
-        except Exception:
-            logger.exception("Failed to initialize Redis store, falling back to in-memory state")
+        except Exception as exc:
+            logger.exception("Failed to initialize Redis simulation state store")
+            if settings.require_persistent_urls:
+                raise RuntimeError(
+                    "REDIS_URL is configured but Redis simulation state store initialization failed."
+                ) from exc
+
+    if settings.require_persistent_urls:
+        raise RuntimeError(
+            "REDIS_URL is required for simulation limits/state in this environment."
+        )
 
     logger.warning("Using in-memory simulation state store; limits are process-local")
     return InMemoryStateStore()

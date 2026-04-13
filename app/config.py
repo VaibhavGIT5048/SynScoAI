@@ -101,6 +101,7 @@ class Settings:
     max_input_chars_topic: int
     max_input_chars_context: int
     redis_url: Optional[str]
+    require_persistent_urls: bool
     trust_proxy_headers: bool
     trusted_proxy_ips: list[str]
     pipeline_stream_node_concurrency: int
@@ -117,6 +118,9 @@ _OPENAI_MODEL_GRAPH = _read_optional("OPENAI_MODEL_GRAPH") or _OPENAI_MODEL
 _OPENAI_MODEL_AGENTS = _read_optional("OPENAI_MODEL_AGENTS") or _OPENAI_MODEL
 _OPENAI_MODEL_SIMULATION = _read_optional("OPENAI_MODEL_SIMULATION") or "gpt-5.4-nano"
 _OPENAI_MODEL_REPORT = _read_optional("OPENAI_MODEL_REPORT") or _OPENAI_MODEL
+_REQUIRE_PERSISTENT_URLS_DEFAULT = (
+    (_read_optional("RAILWAY_ENVIRONMENT") or "").strip().lower() == "production"
+)
 
 settings = Settings(
     openai_api_key=_read_required("OPENAI_API_KEY"),
@@ -133,6 +137,10 @@ settings = Settings(
     max_input_chars_topic=_read_required_int("MAX_INPUT_CHARS_TOPIC"),
     max_input_chars_context=_read_required_int("MAX_INPUT_CHARS_CONTEXT"),
     redis_url=_read_optional("REDIS_URL"),
+    require_persistent_urls=_read_bool(
+        "REQUIRE_PERSISTENT_URLS",
+        default=_REQUIRE_PERSISTENT_URLS_DEFAULT,
+    ),
     trust_proxy_headers=_read_bool("TRUST_PROXY_HEADERS", default=False),
     trusted_proxy_ips=_parse_optional_csv(_read_optional("TRUSTED_PROXY_IPS")),
     pipeline_stream_node_concurrency=_read_int("PIPELINE_STREAM_NODE_CONCURRENCY", default=4),
