@@ -1,4 +1,5 @@
 const LOCAL_BACKEND_FALLBACK = 'http://127.0.0.1:8000';
+const PROD_PROXY_FALLBACK = '/backend';
 
 function isLocalBrowserHost(): boolean {
   if (typeof window === 'undefined') {
@@ -29,8 +30,8 @@ function resolveApiBase(): string {
     return '/api';
   }
 
-  console.warn('VITE_API_BASE_URL is not set. Falling back to /api.');
-  return '/api';
+  console.warn(`VITE_API_BASE_URL is not set. Falling back to ${PROD_PROXY_FALLBACK}.`);
+  return PROD_PROXY_FALLBACK;
 }
 
 const API_BASE = resolveApiBase();
@@ -42,7 +43,7 @@ async function performRequest(input: RequestInfo | URL, init?: RequestInit): Pro
   } catch {
     if (API_BASE.startsWith('http')) {
       throw new Error(
-        `Unable to reach backend at ${API_BASE}. Ensure FastAPI is running and VITE_API_BASE_URL is correct.`
+        `Unable to reach backend at ${API_BASE}. Check network/DNS reachability and VITE_API_BASE_URL.`
       );
     }
 
@@ -64,8 +65,8 @@ async function extractErrorDetail(response: Response): Promise<string> {
     }
   }
 
-  if (response.status === 404 && API_BASE === '/api') {
-    return 'Backend API is not reachable through /api. Ensure the backend is running and Vite dev proxy is enabled.';
+  if (response.status === 404 && (API_BASE === '/api' || API_BASE === '/backend')) {
+    return `Backend API is not reachable through ${API_BASE}. Check Netlify redirects and backend health.`;
   }
 
   return `HTTP ${response.status}`;

@@ -966,6 +966,10 @@ export default function SimulatePage() {
       (apiError.toLowerCase().includes('unable to reach backend') ||
         apiError.toLowerCase().includes('vite_api_base_url'))
   );
+  const showLocalBackendHint =
+    showBackendHint &&
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   return (
     <>
@@ -991,7 +995,15 @@ export default function SimulatePage() {
                 <p className="text-xs mt-1" style={{ color: '#ef4444', opacity: 0.8 }}>{apiError}</p>
                 {showBackendHint && (
                   <p className="text-xs mt-2" style={{ color: '#ef4444', opacity: 0.85 }}>
-                    Start backend with: <strong>cd /Users/vaibhavgupta7047/Documents/Projects/SynScoAI &amp;&amp; source .venv/bin/activate &amp;&amp; uvicorn app.main:app --host 127.0.0.1 --port 8000</strong>
+                    {showLocalBackendHint ? (
+                      <>
+                        Start backend with: <strong>cd /Users/vaibhavgupta7047/Documents/Projects/SynScoAI &amp;&amp; source .venv/bin/activate &amp;&amp; uvicorn app.main:app --host 127.0.0.1 --port 8000</strong>
+                      </>
+                    ) : (
+                      <>
+                        Production network issue detected. Retry in a few seconds, then check <strong>/backend/health</strong> and DNS/VPN settings if it persists.
+                      </>
+                    )}
                   </p>
                 )}
               </div>
