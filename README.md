@@ -3,7 +3,7 @@
 [![Frontend](https://img.shields.io/badge/Frontend-Netlify-00C7B7?logo=netlify&logoColor=white)](https://synsoc-ai.netlify.app)
 [![Backend](https://img.shields.io/badge/Backend-Railway-0B0D0E?logo=railway&logoColor=white)](https://synsoc-api-production.up.railway.app/health)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.135-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT-412991?logo=openai&logoColor=white)](https://openai.com/)
@@ -109,25 +109,30 @@ flowchart LR
 | Tool | Version | Role |
 |---|---|---|
 | React | 19 | UI framework |
-| Vite | 6 | Build tool + dev server |
+| Vite | 6.4.x | Build tool + dev server |
 | Netlify | — | CDN deployment + SPA routing |
-| Recharts | — | Analytics charts |
-| Mermaid.js | — | Knowledge graph visualisation |
+| D3.js | 7.9.x | Agent/network graph visualisation |
+| Three.js | 0.183.x | Animated visual background |
+| Motion | 12.x | UI animation system |
 
 ### Backend
 | Tool | Version | Role |
 |---|---|---|
 | Python | 3.11+ | Runtime |
-| FastAPI | 0.111 | API framework |
-| Uvicorn | — | ASGI server |
-| OpenAI SDK | — | LLM calls (GPT-*) |
-| Railway | — | Cloud deployment |
+| FastAPI | 0.135.3 | API framework |
+| Uvicorn | 0.44.0 | ASGI server |
+| OpenAI SDK | 2.31.0 | LLM calls (GPT-*) |
+| asyncpg + Redis | 0.31.0 + 5.2.1 | Run persistence + simulation/state limits |
+| Railway | — | Live backend deployment |
+| Render | — | Optional alternative via `render.yaml` |
 
 ### Design Patterns
 - **Streaming-first** — SSE from first byte; UI updates are event-driven, not polled
 - **Pipeline architecture** — four discrete, testable stages with individual endpoints
 - **Rate limiting** — IP-level (60/min) + visitor-level (25 sim/day, 1 concurrent)
 - **CORS hardening** — strict `ALLOWED_ORIGINS` enforced at middleware level
+- **Proxy-aware client identity** — forwarded headers are trusted only from configured proxy IP ranges
+- **Durable run artifacts** — persisted run payloads with PDF/DOCX export endpoints
 
 ---
 
@@ -152,7 +157,7 @@ Full interactive docs: https://synsoc-api-production.up.railway.app/docs
 
 ## Performance
 
-Latest live Netlify timing run (full simulation flow):
+Reference live Netlify timing run (full simulation flow; varies by topic/model):
 
 | Milestone | Time |
 |---|---|
@@ -231,21 +236,24 @@ Open http://localhost:5173
 | `MAX_INPUT_CHARS_CONTEXT` | ✅ | `4000` | Context field character limit |
 | `PIPELINE_STREAM_NODE_CONCURRENCY` | ❌ | `4` | Parallel node processing in stream mode |
 | `RUN_RESULT_TTL_SECONDS` | ❌ | `86400` | Persisted run retention TTL |
-| `DATABASE_URL` | ✅ (prod) | `postgresql://...` | Supabase/Postgres backend for run persistence |
+| `DATABASE_URL` | ✅ (prod) | `postgresql://...` | Postgres backend for run persistence |
 | `REDIS_URL` | ✅ (prod) | `redis://...` | Redis backend for IP limits and simulation slot state |
-| `REQUIRE_PERSISTENT_URLS` | ❌ | `true` | Enforces required URL-backed stores (defaults to `true` on Railway production) |
-| `SUPABASE_JWT_SECRET` | ❌ | `your-jwt-secret` | Enables JWT verification for run ownership enforcement |
-| `SUPABASE_JWT_AUDIENCE` | ❌ | `authenticated` | Expected token audience for Supabase access tokens |
-| `SUPABASE_JWT_ISSUER` | ❌ | `https://<project-ref>.supabase.co/auth/v1` | Optional issuer validation for Supabase tokens |
-| `SUPABASE_SERVICE_ROLE_KEY` | ❌ | `eyJ...` | Fallback for token introspection when JWT secret is not configured |
+| `REQUIRE_PERSISTENT_URLS` | ❌ | `true` | Enforces URL-backed stores (`DATABASE_URL` + `REDIS_URL`) |
+| `RAILWAY_ENVIRONMENT` | ❌ | `production` | When `production`, default for `REQUIRE_PERSISTENT_URLS` becomes `true` |
+| `TRUST_PROXY_HEADERS` | ❌ | `false` | Enables trusted proxy forwarding header parsing |
+| `TRUSTED_PROXY_IPS` | ❌ | `10.0.0.0/8,192.168.0.0/16` | CIDRs/IPs allowed to supply `x-forwarded-for` / `x-real-ip` |
+| `SUPABASE_JWT_SECRET` | ❌ | `your-jwt-secret` | Optional JWT verification helper configuration |
+| `SUPABASE_JWT_AUDIENCE` | ❌ | `authenticated` | Optional expected token audience |
+| `SUPABASE_JWT_ISSUER` | ❌ | `https://<project-ref>.supabase.co/auth/v1` | Optional issuer validation |
+| `SUPABASE_SERVICE_ROLE_KEY` | ❌ | `eyJ...` | Optional fallback for token introspection |
 
 ### Frontend (`synsoc-ai-frontend/.env`)
 
-| Variable | Required | Example |
-|---|---|---|
-| `VITE_API_BASE_URL` | ✅ | `http://localhost:8000` |
-| `VITE_SUPABASE_URL` | ❌ | `https://<project-ref>.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | ❌ | `eyJ...` |
+| Variable | Required | Example | Notes |
+|---|---|---|---|
+| `VITE_API_BASE_URL` | ✅ (recommended) | `http://localhost:8000` | Primary backend base URL |
+| `VITE_API_URL` | ❌ | `http://localhost:8000` | Alias fallback used when `VITE_API_BASE_URL` is unset |
+| `VITE_PUBLIC_URL` | ❌ | `http://localhost:5173` | Public origin used by frontend integrations |
 
 ---
 
@@ -253,7 +261,7 @@ Open http://localhost:5173
 
 ### Frontend — Netlify
 
-`synsoc-ai-frontend/netlify.toml`:
+[synsoc-ai-frontend/netlify.toml](synsoc-ai-frontend/netlify.toml):
 
 ```toml
 [build]
@@ -264,7 +272,7 @@ Open http://localhost:5173
   NODE_VERSION = "22"
 ```
 
-### Backend — Railway
+### Backend — Railway (live)
 
 **Build command:**
 ```bash
@@ -278,6 +286,10 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
 Set all environment variables in the Railway project dashboard under **Variables**.
 
+### Backend — Render (optional)
+
+A ready manifest is included at [render.yaml](render.yaml) with matching build/start commands and `healthCheckPath: /health`.
+
 ---
 
 ## Project Layout
@@ -286,23 +298,41 @@ Set all environment variables in the Railway project dashboard under **Variables
 SynScoAI/
 ├── app/                          # FastAPI application
 │   ├── main.py                   # App entry point, middleware, CORS
+│   ├── config.py                 # Env parsing and runtime settings
+│   ├── security.py               # Rate limits, visitor quotas, timeout guards
 │   ├── routers/                  # Route handlers per endpoint group
-│   └── services/                 # Pipeline stage implementations
-│       ├── graph_extraction.py
-│       ├── agent_generation.py
-│       ├── simulation_engine.py
-│       └── report_builder.py
+│   │   ├── analyze.py
+│   │   ├── agents.py
+│   │   ├── simulate.py
+│   │   ├── report.py
+│   │   ├── pipeline.py
+│   │   └── runs.py
+│   ├── models/
+│   │   └── graph.py              # Request/response schemas
+│   └── services/                 # Pipeline and infrastructure services
+│       ├── graph_service.py
+│       ├── agent_service.py
+│       ├── simulation_service.py
+│       ├── report_service.py
+│       ├── run_store.py
+│       ├── export_service.py
+│       ├── llm_client.py
+│       └── auth_service.py
 ├── requirements.txt
 ├── .env.example
+├── render.yaml
 ├── docs/
 │   └── demo-script-2min.md       # Presentation-ready demo script
+├── tests/                        # Backend test suite
 └── synsoc-ai-frontend/           # React + Vite frontend
     ├── src/
     │   ├── components/
-    │   ├── hooks/
-    │   └── pages/
+    │   ├── layouts/
+    │   ├── pages/
+    │   ├── lib/
+    │   └── styles/
     ├── netlify.toml
-    └── vite.config.js
+    └── vite.config.ts
 ```
 
 ---
@@ -347,11 +377,22 @@ Increase `REQUEST_TIMEOUT_SECONDS` in your backend `.env`. Full simulations with
 `RATE_LIMIT_PER_MINUTE_IP` counts all requests per IP, not just simulations. During development against localhost, lower this limit to avoid interfering with hot-reload requests.
 </details>
 
+<details>
+<summary>Incorrect client IP detected behind a proxy</summary>
+
+Enable proxy trust only when your ingress IPs are known:
+
+```
+TRUST_PROXY_HEADERS=true
+TRUSTED_PROXY_IPS=<comma-separated-proxy-cidrs-or-ips>
+```
+</details>
+
 ---
 
 ## Demo Script
 
-A 2-minute presentation-ready walkthrough is in [`docs/demo-script-2min.md`](docs/demo-script-2min.md).
+A 2-minute presentation-ready walkthrough is in [docs/demo-script-2min.md](docs/demo-script-2min.md).
 
 ---
 
@@ -371,4 +412,4 @@ For academic and demo use. Add your preferred open-source license if you plan pu
 
 ---
 
-*Built with FastAPI, React, and OpenAI. Deployed on Railway + Netlify.*
+*Built with FastAPI, React, and OpenAI. Deployed on Railway + Netlify, with optional Render deployment via `render.yaml`.*
