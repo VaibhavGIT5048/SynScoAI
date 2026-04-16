@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Info } from 'lucide-react';
 import * as d3 from 'd3';
-import { streamPipeline } from '../lib/api-client';
+import { fetchRun, streamPipeline } from '../lib/api-client';
 import type { GraphNode, GraphEdge, Agent, SimulationTurn } from '../lib/api-client';
 
 const STANCE_COLORS: Record<string, string> = {
@@ -806,6 +806,7 @@ export default function SimulatePage() {
 
     let rafId = 0;
     let stopFn: (() => void) | null = null;
+    let isActive = true;
 
     const startWhenReady = () => {
       if (!svgRef.current) { rafId = requestAnimationFrame(startWhenReady); return; }
@@ -819,6 +820,104 @@ export default function SimulatePage() {
       let agentsData: any = null;
       let simData: any = null;
       let allDebateEvents: DebateEvent[] = [];
+      let currentRunId: string | null = lastRunId;
+      let reportReceived = false;
+      let recoveringFromRun = false;
+
+      const finalizeFromPipelineResult = (resultPayload: any, runId: string | null) => {
+        if (!isActive) return;
+
+        const resolvedTopic = resultPayload?.topic ?? form.topic;
+        graphData = resultPayload?.graph ?? graphData;
+        graphEdges = graphData?.edges ?? graphEdges;
+        agentsData = resultPayload?.agents ?? agentsData;
+        simData = resultPayload?.simulation ?? simData;
+
+        if (Array.isArray(resultPayload?.agents?.agents)) {
+          allAgents = resultPayload.agents.agents;
+        }
+        if (Array.isArray(resultPayload?.simulation?.turns)) {
+          allTurns = resultPayload.simulation.turns;
+        }
+
+        agentsRef.current = allAgents;
+        setNodes(graphData?.nodes ?? []);
+        setGraphEdgesState(graphEdges);
+        setAgents([...allAgents]);
+        setTurns([...allTurns]);
+
+        const result = {
+          topic: resolvedTopic,
+          graph: graphData,
+          agents: agentsData,
+          simulation: simData,
+          report: resultPayload?.report,
+        };
+        localStorage.setItem('synsoc_pipeline_result', JSON.stringify(result));
+
+        if (runId) {
+          currentRunId = runId;
+          setLastRunId(runId);
+          localStorage.setItem('synsoc_last_run_id', runId);
+        }
+
+        const workspaceSnapshot: SimulationWorkspaceSnapshot = {
+          phase: 'done',
+          form: {
+            topic: form.topic,
+            context: form.context,
+            rounds: form.rounds,
+            agents_per_round: form.agents_per_round,
+            agents_per_node: form.agents_per_node,
+          },
+          statusMsg: 'Report ready!',
+          nodes: graphData?.nodes ?? [],
+          edges: graphData?.edges ?? graphEdges,
+          agents: allAgents,
+          turns: allTurns,
+          debateEvents: allDebateEvents,
+        };
+        localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspaceSnapshot));
+
+        setStatusMsg('Report ready!');
+        setPhase('done');
+        simRef.current?.alphaTarget(0);
+        simRef.current?.stop();
+      };
+
+      const recoverFromRun = async (runId: string): Promise<boolean> => {
+        if (recoveringFromRun) {
+          return false;
+        }
+        recoveringFromRun = true;
+
+        if (isActive) {
+          setStatusMsg('Stream ended while generating report. Recovering saved run...');
+        }
+
+        for (let attempt = 1; attempt <= 6; attempt += 1) {
+          try {
+            const runPayload = await fetchRun(runId);
+            const resultPayload = runPayload?.result;
+            if (resultPayload?.graph && resultPayload?.agents && resultPayload?.simulation && resultPayload?.report) {
+              reportReceived = true;
+              const resolvedRunId = runPayload.run_id || runId;
+              finalizeFromPipelineResult(resultPayload, resolvedRunId);
+              recoveringFromRun = false;
+              return true;
+            }
+          } catch {
+            // Keep polling briefly; write may not be visible immediately.
+          }
+
+          if (attempt < 6) {
+            await new Promise((resolve) => window.setTimeout(resolve, 1200));
+          }
+        }
+
+        recoveringFromRun = false;
+        return false;
+      };
 
       const stop = streamPipeline(
         {
@@ -829,7 +928,17 @@ export default function SimulatePage() {
           agents_per_node: form.agents_per_node,
         },
         (event, data) => {
-          if (event === 'status') { setStatusMsg(data.message); }
+          if (event === 'run_started') {
+            if (typeof data.run_id === 'string' && data.run_id) {
+              currentRunId = data.run_id;
+              if (isActive) {
+                setLastRunId(data.run_id);
+                localStorage.setItem('synsoc_last_run_id', data.run_id);
+              }
+            }
+          }
+
+          else if (event === 'status') { setStatusMsg(data.message); }
 
           else if (event === 'graph') {
             graphData = data.graph; graphEdges = data.graph.edges;
@@ -907,40 +1016,58 @@ export default function SimulatePage() {
           }
 
           else if (event === 'report') {
-            const result = { topic: form.topic, graph: graphData, agents: agentsData, simulation: simData, report: data.report };
-            localStorage.setItem('synsoc_pipeline_result', JSON.stringify(result));
             if (typeof data.run_id === 'string' && data.run_id) {
-              setLastRunId(data.run_id);
-              localStorage.setItem('synsoc_last_run_id', data.run_id);
+              currentRunId = data.run_id;
             }
-            const workspaceSnapshot: SimulationWorkspaceSnapshot = {
-              phase: 'done',
-              form: {
-                topic: form.topic,
-                context: form.context,
-                rounds: form.rounds,
-                agents_per_round: form.agents_per_round,
-                agents_per_node: form.agents_per_node,
-              },
-              statusMsg: 'Report ready!',
-              nodes: graphData?.nodes ?? [],
-              edges: graphData?.edges ?? graphEdges,
-              agents: allAgents,
-              turns: allTurns,
-              debateEvents: allDebateEvents,
+            reportReceived = true;
+            const streamResult = {
+              topic: form.topic,
+              graph: graphData,
+              agents: agentsData,
+              simulation: simData,
+              report: data.report,
             };
-            localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspaceSnapshot));
-
-            setStatusMsg('Report ready!'); setPhase('done');
-            simRef.current?.alphaTarget(0);
-            simRef.current?.stop();
+            finalizeFromPipelineResult(streamResult, currentRunId);
           }
 
           else if (event === 'complete') {
             if (typeof data.run_id === 'string' && data.run_id) {
-              setLastRunId(data.run_id);
-              localStorage.setItem('synsoc_last_run_id', data.run_id);
+              currentRunId = data.run_id;
+              if (isActive) {
+                setLastRunId(data.run_id);
+                localStorage.setItem('synsoc_last_run_id', data.run_id);
+              }
             }
+
+            if (!reportReceived && currentRunId) {
+              void (async () => {
+                const recovered = await recoverFromRun(currentRunId as string);
+                if (!recovered && isActive) {
+                  setApiError('Report generation finished but stream closed before final payload delivery. Please retry.');
+                  setPhase('config');
+                }
+              })();
+            }
+          }
+
+          else if (event === 'stream_closed') {
+            if (reportReceived) {
+              return;
+            }
+
+            if (!currentRunId) {
+              setApiError('Stream closed before report completed. Please retry.');
+              setPhase('config');
+              return;
+            }
+
+            void (async () => {
+              const recovered = await recoverFromRun(currentRunId as string);
+              if (!recovered && isActive) {
+                setApiError('Stream closed before report was delivered and run recovery failed. Please retry.');
+                setPhase('config');
+              }
+            })();
           }
 
           else if (event === 'error') { setApiError(data.message); setPhase('config'); }
@@ -951,7 +1078,7 @@ export default function SimulatePage() {
     };
 
     rafId = requestAnimationFrame(startWhenReady);
-    return () => { cancelAnimationFrame(rafId); stopFn?.(); };
+    return () => { isActive = false; cancelAnimationFrame(rafId); stopFn?.(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 

@@ -234,6 +234,37 @@ export function streamPipeline(
   const controller = new AbortController();
 
   (async () => {
+    let sawTerminalEvent = false;
+
+    const emitParsedEvent = (parsed: any) => {
+      const eventName = typeof parsed?.event === 'string' ? parsed.event : '';
+      if (!eventName) {
+        return;
+      }
+
+      if (eventName === 'report' || eventName === 'complete' || eventName === 'error') {
+        sawTerminalEvent = true;
+      }
+
+      onEvent(eventName, parsed);
+    };
+
+    const processRawSseBlock = (rawBlock: string) => {
+      const lines = rawBlock.split(/\r?\n/);
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) {
+          continue;
+        }
+
+        try {
+          const parsed = JSON.parse(line.slice(6));
+          emitParsedEvent(parsed);
+        } catch {
+          // Ignore malformed stream chunks.
+        }
+      }
+    };
+
     try {
       const headers = await jsonHeaders();
       const response = await performRequest(`${API_BASE}/pipeline/stream`, {
@@ -262,19 +293,21 @@ export function streamPipeline(
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() ?? '';
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop() ?? '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const parsed = JSON.parse(line.slice(6));
-              onEvent(parsed.event, parsed);
-            } catch {
-              // Ignore malformed stream chunks.
-            }
-          }
+        for (const block of blocks) {
+          processRawSseBlock(block);
         }
+      }
+
+      const trailing = buffer.trim();
+      if (trailing) {
+        processRawSseBlock(trailing);
+      }
+
+      if (!sawTerminalEvent) {
+        onEvent('stream_closed', { message: 'Stream closed before terminal event.' });
       }
     } catch (err) {
       // Ignore expected abort errors from caller cleanup.

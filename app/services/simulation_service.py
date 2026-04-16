@@ -97,15 +97,19 @@ async def run_simulation(
 
     all_turns: List[SimulationTurn] = []
     ordered_agents = sorted(agents, key=lambda agent: agent.id)
-    rng = random.Random(seed) if seed is not None else random.Random()
+    speaker_window = min(agents_per_round, len(ordered_agents))
+    seed_offset = 0
+    if seed is not None and len(ordered_agents) > 0:
+        seed_offset = random.Random(seed).randrange(len(ordered_agents))
 
     for round_num in range(1, rounds + 1):
         print(f"\n🔄 Round {round_num}/{rounds}")
 
-        speaking_agents = rng.sample(
-            ordered_agents,
-            min(agents_per_round, len(agents)),
-        )
+        start_index = (seed_offset + (round_num - 1) * speaker_window) % len(ordered_agents)
+        speaking_agents = [
+            ordered_agents[(start_index + i) % len(ordered_agents)]
+            for i in range(speaker_window)
+        ]
 
         for agent in speaking_agents:
             turn = await _agent_speak(

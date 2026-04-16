@@ -2,6 +2,7 @@ import asyncio
 import json
 import random
 import time
+from contextlib import suppress
 from collections import Counter
 import logging
 from fastapi import APIRouter, HTTPException, Request
@@ -98,7 +99,11 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
     run_id = create_run_id()
 
     async def generate():
+        report_task: asyncio.Task | None = None
         try:
+            # Emit run_id immediately so clients can recover results if stream drops later.
+            yield sse("run_started", {"run_id": run_id})
+
             # Step 1 — Graph
             yield sse("status", {"message": "Extracting social knowledge graph..."})
             graph = await asyncio.wait_for(
@@ -159,13 +164,18 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
             # Step 3 — Simulation (stream each turn live)
             yield sse("status", {"message": "Running multi-agent simulation..."})
             all_turns = []
-            simulation_rng = random.Random(request.random_seed)
+            speaker_window = min(request.agents_per_round, len(all_agents))
+            seed_offset = 0
+            if request.random_seed is not None and len(all_agents) > 0:
+                seed_offset = random.Random(request.random_seed).randrange(len(all_agents))
+
             for round_num in range(1, request.rounds + 1):
                 yield sse("round_start", {"round": round_num, "total_rounds": request.rounds})
-                speaking_agents = simulation_rng.sample(
-                    all_agents,
-                    min(request.agents_per_round, len(all_agents)),
-                )
+                start_index = (seed_offset + (round_num - 1) * speaker_window) % len(all_agents)
+                speaking_agents = [
+                    all_agents[(start_index + i) % len(all_agents)]
+                    for i in range(speaker_window)
+                ]
                 for agent in speaking_agents:
                     turn = await asyncio.wait_for(
                         _agent_speak(
@@ -200,15 +210,26 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
                 key_tensions=key_tensions,
                 dominant_stances=dict(stance_counts),
             )
-            report = await asyncio.wait_for(
+            report_task = asyncio.create_task(
                 generate_report(
                     topic=request.topic,
                     simulation=simulation,
                     agents=all_agents,
                     context=request.context or "",
-                ),
-                timeout=_remaining_timeout(deadline),
+                )
             )
+
+            keepalive_interval_seconds = 4.0
+            while not report_task.done():
+                remaining_timeout = _remaining_timeout(deadline)
+                wait_timeout = min(keepalive_interval_seconds, remaining_timeout)
+                done, _ = await asyncio.wait({report_task}, timeout=wait_timeout)
+                if done:
+                    break
+                # SSE comment frame to keep intermediaries and browser readers alive.
+                yield ": keepalive\n\n"
+
+            report = await report_task
             result_payload = PipelineResponse(
                 topic=request.topic,
                 graph=graph,
@@ -227,8 +248,16 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
             yield sse("complete", {"message": "Pipeline complete!", "run_id": run_id})
 
         except asyncio.TimeoutError:
+            if report_task and not report_task.done():
+                report_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await report_task
             yield sse("error", {"message": "Simulation request timed out."})
         except Exception:
+            if report_task and not report_task.done():
+                report_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await report_task
             logger.exception("Pipeline stream failed")
             yield sse("error", {"message": "An internal error occurred."})
         finally:
