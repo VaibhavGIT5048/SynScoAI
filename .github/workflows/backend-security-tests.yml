@@ -33,7 +33,7 @@ jobs:
           RATE_LIMIT_PER_MINUTE_IP: "1000"
           SIM_LIMIT_PER_DAY_VISITOR: "1000"
           MAX_CONCURRENT_SIM_PER_VISITOR: "1"
-          REQUEST_TIMEOUT_SECONDS: "1"
+          REQUEST_TIMEOUT_SECONDS: "5"
           MAX_INPUT_CHARS_TOPIC: "200"
           MAX_INPUT_CHARS_CONTEXT: "5000"
         run: pytest tests/test_pipeline_security.py -q

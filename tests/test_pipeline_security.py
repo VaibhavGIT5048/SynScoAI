@@ -215,6 +215,7 @@ async def test_pipeline_stream_same_visitor_concurrency_returns_200_then_429(
     monkeypatch: pytest.MonkeyPatch,
 ):
     gate = asyncio.Event()
+    first_request_entered = asyncio.Event()
 
     async def fake_extract_graph(topic: str, context: str | None = None):
         return _build_graph(topic)
@@ -228,6 +229,7 @@ async def test_pipeline_stream_same_visitor_concurrency_returns_200_then_429(
         counter_start: int,
     ):
         # Block stream progress until the second request is sent.
+        first_request_entered.set()
         await gate.wait()
         return [_build_agent(counter_start)]
 
@@ -256,7 +258,7 @@ async def test_pipeline_stream_same_visitor_concurrency_returns_200_then_429(
             return await client.post("/pipeline/stream", json=_payload(), headers=headers)
 
     first_task = asyncio.create_task(first_request())
-    await asyncio.sleep(0.05)
+    await asyncio.wait_for(first_request_entered.wait(), timeout=2.0)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
