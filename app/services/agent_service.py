@@ -36,6 +36,12 @@ def _clean_relationships(relationships) -> List[str]:
     return cleaned
 
 
+def _number_agent_names(agents: List[Agent]) -> List[Agent]:
+    for index, agent in enumerate(agents, start=1):
+        agent.name = f"Agent {index}"
+    return agents
+
+
 async def _generate_agents_for_node(
     node,
     topic: str,
@@ -117,6 +123,7 @@ async def generate_agents_from_graph(
     results = await asyncio.gather(*tasks)
 
     all_agents = [agent for node_agents in results for agent in node_agents]
+    all_agents = _number_agent_names(all_agents)
 
     return AgentResponse(
         topic=topic,

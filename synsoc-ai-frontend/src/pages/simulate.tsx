@@ -97,7 +97,7 @@ export default function SimulatePage() {
   const selectedAgentIdRef = useRef<string | null>(null);
 
   const [phase, setPhase] = useState<Phase>('config');
-  const [form, setForm] = useState({ topic: '', context: '', rounds: 2, agents_per_round: 3, agents_per_node: 3 });
+  const [form, setForm] = useState({ topic: '', context: '', rounds: 2, agents_per_round: 1, agents_per_node: 3 });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMsg, setStatusMsg] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
@@ -238,6 +238,8 @@ export default function SimulatePage() {
     if (!svgRef.current || !simRef.current) return;
     const svg = d3.select(svgRef.current);
     const sim = simRef.current;
+
+    if (d3NodesRef.current.some((node: any) => node.id === nd.id)) return;
 
     d3NodesRef.current = [...d3NodesRef.current, nd];
 
@@ -411,7 +413,13 @@ export default function SimulatePage() {
     const debateDatum = { source, target };
 
     svg.select('#links-layer')
+      .selectAll<SVGLineElement, any>('line.debate-pulse')
+      .interrupt()
+      .remove();
+
+    svg.select('#links-layer')
       .append('line')
+      .attr('class', 'debate-pulse')
       .datum(debateDatum as any)
       .attr('stroke', color)
       .attr('stroke-width', 2.8)
@@ -426,10 +434,10 @@ export default function SimulatePage() {
       .attr('y2', target.y ?? 0)
       .attr('opacity', 0)
       .transition()
-      .duration(140)
+      .duration(100)
       .attr('opacity', 1)
       .transition()
-      .duration(1400)
+      .duration(620)
       .ease(d3.easeLinear)
       .attr('stroke-dashoffset', -45)
       .attr('opacity', 0)
@@ -956,10 +964,11 @@ export default function SimulatePage() {
 
           else if (event === 'agents_batch') {
             const newAgents: Agent[] = data.agents;
-            allAgents = [...allAgents, ...newAgents];
+            const mergedAgents = [...allAgents, ...newAgents];
+            allAgents = Array.from(new Map(mergedAgents.map((agent) => [agent.id, agent])).values());
             agentsRef.current = allAgents;
             setAgents([...allAgents]);
-            setStatusMsg(`Spawning agents for ${data.node_label}... (${data.total_so_far} total)`);
+            setStatusMsg(`Spawning agents for ${data.node_label}... (${allAgents.length} total)`);
             const parent = d3NodesRef.current.find(n => n.id === data.node_id);
             newAgents.forEach((a: Agent, i: number) => {
               const angle = (i / newAgents.length) * Math.PI * 2;
@@ -974,7 +983,10 @@ export default function SimulatePage() {
             setStatusMsg(`${data.total_agents} agents ready — debate starting...`);
           }
 
-          else if (event === 'round_start') { setStatusMsg(`Round ${data.round} of ${data.total_rounds}`); }
+          else if (event === 'round_start') {
+            prevTurn = null;
+            setStatusMsg(`Round ${data.round} of ${data.total_rounds}`);
+          }
 
           else if (event === 'turn') {
             const turn: SimulationTurn = data.turn;
@@ -1146,7 +1158,7 @@ export default function SimulatePage() {
                 <div className="grid grid-cols-3 gap-4">
                   {[
                     { key: 'rounds', label: 'Rounds', min: 1, max: 10, hint: '1–10' },
-                    { key: 'agents_per_round', label: 'Agents/Round', min: 2, max: 10, hint: '2–10' },
+                    { key: 'agents_per_round', label: 'Agents/Round', min: 1, max: 10, hint: '1–10' },
                     { key: 'agents_per_node', label: 'Agents/Node', min: 1, max: 6, hint: '1–6' },
                   ].map(({ key, label, min, max, hint }) => (
                     <div key={key} className="flex flex-col gap-2">
