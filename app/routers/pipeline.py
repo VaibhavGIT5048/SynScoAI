@@ -141,6 +141,12 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
                         pending_task,
                         timeout=_remaining_timeout(deadline),
                     )
+                    for agent in node_agents:
+                        try:
+                            agent_index = int(str(agent.id).split("_")[-1])
+                            agent.name = f"Agent {agent_index}"
+                        except (ValueError, TypeError):
+                            pass
                     all_agents.extend(node_agents)
                     yield sse("agents_batch", {
                         "node_id": node.id,
