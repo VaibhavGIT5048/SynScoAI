@@ -36,4 +36,4 @@ jobs:
           REQUEST_TIMEOUT_SECONDS: "5"
           MAX_INPUT_CHARS_TOPIC: "200"
           MAX_INPUT_CHARS_CONTEXT: "5000"
-        run: pytest tests/test_pipeline_security.py -q
+        run: PYTHONPATH=. pytest tests/test_pipeline_security.py -q
