@@ -408,7 +408,7 @@ A 2-minute presentation-ready walkthrough is in [docs/demo-script-2min.md](docs/
 
 ## License
 
-For academic and demo use. Add your preferred open-source license if you plan public redistribution.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 ---
 
