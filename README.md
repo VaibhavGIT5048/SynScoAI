@@ -207,6 +207,12 @@ Set the API URL in `synsoc-ai-frontend/.env`:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
+For Netlify production builds, use a same-origin proxy path:
+
+```env
+VITE_API_BASE_URL=/backend
+```
+
 ```bash
 npm run dev
 ```
@@ -251,7 +257,7 @@ Open http://localhost:5173
 
 | Variable | Required | Example | Notes |
 |---|---|---|---|
-| `VITE_API_BASE_URL` | ✅ (recommended) | `http://localhost:8000` | Primary backend base URL |
+| `VITE_API_BASE_URL` | ✅ (recommended) | `http://localhost:8000` | Local dev URL; for Netlify production use `/backend` |
 | `VITE_API_URL` | ❌ | `http://localhost:8000` | Alias fallback used when `VITE_API_BASE_URL` is unset |
 | `VITE_PUBLIC_URL` | ❌ | `http://localhost:5173` | Public origin used by frontend integrations |
 
@@ -270,6 +276,19 @@ Open http://localhost:5173
 
 [build.environment]
   NODE_VERSION = "22"
+  VITE_API_BASE_URL = "/backend"
+
+[[redirects]]
+  from = "/backend/*"
+  to = "https://synsoc-api-production.up.railway.app/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://synsoc-api-production.up.railway.app/:splat"
+  status = 200
+  force = true
 ```
 
 ### Backend — Railway (live)

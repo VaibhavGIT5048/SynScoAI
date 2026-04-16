@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_PUBLIC_URL: string
   readonly VITE_API_URL: string
   readonly VITE_API_BASE_URL: string
+  readonly VITE_ALLOW_ABSOLUTE_API_BASE?: string
   readonly VITE_ENABLE_SOURCE_MAPPING: string
   readonly VITE_ENABLE_SSR: string
 }

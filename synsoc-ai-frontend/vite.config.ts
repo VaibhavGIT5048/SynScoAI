@@ -67,8 +67,20 @@ if (corsOrigins.length === 0) {
 	corsOrigins.push("*");
 }
 
-const backendApiTarget =
-	process.env.VITE_API_BASE_URL || process.env.BACKEND_API_URL || "http://127.0.0.1:8000";
+function resolveBackendApiTarget(): string {
+	const candidates = [process.env.BACKEND_API_URL, process.env.VITE_API_BASE_URL];
+
+	for (const rawValue of candidates) {
+		const value = rawValue?.trim();
+		if (value && /^https?:\/\//i.test(value)) {
+			return value.replace(/\/+$/, "");
+		}
+	}
+
+	return "http://127.0.0.1:8000";
+}
+
+const backendApiTarget = resolveBackendApiTarget();
 
 export default defineConfig(({ mode }) => ({
 	plugins: [

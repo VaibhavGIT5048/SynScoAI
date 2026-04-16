@@ -991,7 +991,7 @@ export default function SimulatePage() {
                 <p className="text-xs mt-1" style={{ color: '#ef4444', opacity: 0.8 }}>{apiError}</p>
                 {showBackendHint && (
                   <p className="text-xs mt-2" style={{ color: '#ef4444', opacity: 0.85 }}>
-                    Start backend with: <strong>cd /Users/vaibhavgupta7047/Documents/Projects/SynScoAI &amp;&amp; source .venv/bin/activate &amp;&amp; uvicorn app.main:app --host 127.0.0.1 --port 8000</strong>
+                    Start backend with: <strong>source .venv/bin/activate &amp;&amp; uvicorn app.main:app --host 127.0.0.1 --port 8000</strong>
                   </p>
                 )}
               </div>

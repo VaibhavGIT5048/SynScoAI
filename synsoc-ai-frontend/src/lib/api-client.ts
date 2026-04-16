@@ -1,4 +1,6 @@
 const LOCAL_BACKEND_FALLBACK = 'http://127.0.0.1:8000';
+const DEV_PROXY_FALLBACK = '/api';
+const PROD_PROXY_FALLBACK = '/backend';
 
 function isLocalBrowserHost(): boolean {
   if (typeof window === 'undefined') {
@@ -9,10 +11,24 @@ function isLocalBrowserHost(): boolean {
   return host === 'localhost' || host === '127.0.0.1';
 }
 
+function isAbsoluteHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
 function resolveApiBase(): string {
-  const explicitBase = import.meta.env.VITE_API_BASE_URL?.trim() || import.meta.env.VITE_API_URL?.trim();
-  if (explicitBase) {
-    return explicitBase.replace(/\/+$/, '');
+  const explicitRaw = import.meta.env.VITE_API_BASE_URL?.trim() || import.meta.env.VITE_API_URL?.trim();
+  if (explicitRaw) {
+    const explicitBase = explicitRaw.replace(/\/+$/, '');
+    const allowAbsoluteInProd = import.meta.env.VITE_ALLOW_ABSOLUTE_API_BASE === 'true';
+
+    if (import.meta.env.PROD && isAbsoluteHttpUrl(explicitBase) && !allowAbsoluteInProd) {
+      console.warn(
+        `Ignoring absolute VITE_API_BASE_URL in production (${explicitBase}). Falling back to ${PROD_PROXY_FALLBACK}.`
+      );
+      return PROD_PROXY_FALLBACK;
+    }
+
+    return explicitBase;
   }
 
   if (import.meta.env.DEV && isLocalBrowserHost()) {
@@ -24,13 +40,13 @@ function resolveApiBase(): string {
 
   if (import.meta.env.DEV) {
     console.warn(
-      'VITE_API_BASE_URL is not set. Falling back to /api and expecting Vite dev proxy to forward to backend.'
+      `VITE_API_BASE_URL is not set. Falling back to ${DEV_PROXY_FALLBACK} and expecting Vite dev proxy to forward to backend.`
     );
-    return '/api';
+    return DEV_PROXY_FALLBACK;
   }
 
-  console.warn('VITE_API_BASE_URL is not set. Falling back to /api.');
-  return '/api';
+  console.warn(`VITE_API_BASE_URL is not set. Falling back to ${PROD_PROXY_FALLBACK}.`);
+  return PROD_PROXY_FALLBACK;
 }
 
 const API_BASE = resolveApiBase();
@@ -64,8 +80,8 @@ async function extractErrorDetail(response: Response): Promise<string> {
     }
   }
 
-  if (response.status === 404 && API_BASE === '/api') {
-    return 'Backend API is not reachable through /api. Ensure the backend is running and Vite dev proxy is enabled.';
+  if (response.status === 404 && (API_BASE === DEV_PROXY_FALLBACK || API_BASE === PROD_PROXY_FALLBACK)) {
+    return `Backend API is not reachable through ${API_BASE}. Check proxy redirects and backend health.`;
   }
 
   return `HTTP ${response.status}`;
