@@ -77,8 +77,6 @@ const DEPTH_TO_ROUNDS: Record<DebateDepth, number> = {
   deep: 5,
 };
 
-const FIXED_AGENTS_PER_ROUND = 2;
-
 type SimulationWorkspaceSnapshot = {
   phase: Phase;
   form: {
@@ -121,7 +119,7 @@ export default function SimulatePage() {
     simulation_size: 'medium' as SimulationSize,
     debate_depth: 'standard' as DebateDepth,
     rounds: DEPTH_TO_ROUNDS.standard,
-    agents_per_round: FIXED_AGENTS_PER_ROUND,
+    agents_per_round: 2,
     agents_per_node: SIZE_TO_AGENTS_PER_NODE.medium,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -960,8 +958,7 @@ export default function SimulatePage() {
           topic: form.topic.trim(),
           context: form.context.trim() || undefined,
           rounds: form.rounds,
-          // Keep debate intensity predictable.
-          agents_per_round: FIXED_AGENTS_PER_ROUND,
+          agents_per_round: form.agents_per_round,
           agents_per_node: form.agents_per_node,
         },
         (event, data) => {
@@ -1264,13 +1261,15 @@ export default function SimulatePage() {
                     </label>
                     <input
                       type="number"
-                      value={FIXED_AGENTS_PER_ROUND}
-                      disabled
+                      min={1}
+                      max={10}
+                      value={form.agents_per_round}
+                      onChange={e => setForm({ ...form, agents_per_round: Number(e.target.value) })}
                       className="w-full px-3 py-3 rounded-md border text-sm"
                       style={inputStyle('agents_per_round')}
                     />
                     <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                      Fixed at {FIXED_AGENTS_PER_ROUND}
+                      1-10
                     </span>
                   </div>
                 </div>
