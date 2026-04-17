@@ -62,12 +62,30 @@ const shortMsg = (raw?: string, len = 110) => {
 };
 
 type Phase = 'config' | 'live' | 'done';
+type SimulationSize = 'small' | 'medium' | 'large';
+type DebateDepth = 'quick' | 'standard' | 'deep';
+
+const SIZE_TO_AGENTS_PER_NODE: Record<SimulationSize, number> = {
+  small: 1,
+  medium: 2,
+  large: 3,
+};
+
+const DEPTH_TO_ROUNDS: Record<DebateDepth, number> = {
+  quick: 2,
+  standard: 3,
+  deep: 5,
+};
+
+const FIXED_AGENTS_PER_ROUND = 2;
 
 type SimulationWorkspaceSnapshot = {
   phase: Phase;
   form: {
     topic: string;
     context: string;
+    simulation_size: SimulationSize;
+    debate_depth: DebateDepth;
     rounds: number;
     agents_per_round: number;
     agents_per_node: number;
@@ -97,7 +115,15 @@ export default function SimulatePage() {
   const selectedAgentIdRef = useRef<string | null>(null);
 
   const [phase, setPhase] = useState<Phase>('config');
-  const [form, setForm] = useState({ topic: '', context: '', rounds: 2, agents_per_round: 1, agents_per_node: 3 });
+  const [form, setForm] = useState({
+    topic: '',
+    context: '',
+    simulation_size: 'medium' as SimulationSize,
+    debate_depth: 'standard' as DebateDepth,
+    rounds: DEPTH_TO_ROUNDS.standard,
+    agents_per_round: FIXED_AGENTS_PER_ROUND,
+    agents_per_node: SIZE_TO_AGENTS_PER_NODE.medium,
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [statusMsg, setStatusMsg] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
@@ -874,6 +900,8 @@ export default function SimulatePage() {
           form: {
             topic: form.topic,
             context: form.context,
+            simulation_size: form.simulation_size,
+            debate_depth: form.debate_depth,
             rounds: form.rounds,
             agents_per_round: form.agents_per_round,
             agents_per_node: form.agents_per_node,
@@ -932,8 +960,8 @@ export default function SimulatePage() {
           topic: form.topic.trim(),
           context: form.context.trim() || undefined,
           rounds: form.rounds,
-          // Debate is intentionally sequential; one speaker per round.
-          agents_per_round: 1,
+          // Keep debate intensity predictable.
+          agents_per_round: FIXED_AGENTS_PER_ROUND,
           agents_per_node: form.agents_per_node,
         },
         (event, data) => {
@@ -1175,23 +1203,76 @@ export default function SimulatePage() {
                     rows={3} className="w-full px-4 py-3 rounded-md border text-sm resize-none" style={inputStyle('context')} />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { key: 'rounds', label: 'Rounds', min: 1, max: 10, hint: '1–10' },
-                    { key: 'agents_per_round', label: 'Agents/Round', min: 1, max: 1, hint: 'Fixed at 1 (sequential)' },
-                    { key: 'agents_per_node', label: 'Agents/Node', min: 1, max: 6, hint: '1–6' },
-                  ].map(({ key, label, min, max, hint }) => (
-                    <div key={key} className="flex flex-col gap-2">
-                      <label className="text-xs font-bold tracking-wider uppercase flex items-center gap-1"
-                        style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>
-                        {label} <Info size={11} style={{ color: 'hsl(var(--muted-foreground))' }} />
-                      </label>
-                      <input type="number" min={min} max={max} value={(form as any)[key]}
-                        onChange={e => setForm({ ...form, [key]: key === 'agents_per_round' ? 1 : Number(e.target.value) })}
-                        disabled={key === 'agents_per_round'}
-                        className="w-full px-3 py-3 rounded-md border text-sm" style={inputStyle(key)} />
-                      <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>{hint}</span>
-                    </div>
-                  ))}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold tracking-wider uppercase flex items-center gap-1"
+                      style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>
+                      Simulation Size <Info size={11} style={{ color: 'hsl(var(--muted-foreground))' }} />
+                    </label>
+                    <select
+                      value={form.simulation_size}
+                      onChange={e => {
+                        const size = e.target.value as SimulationSize;
+                        setForm({
+                          ...form,
+                          simulation_size: size,
+                          agents_per_node: SIZE_TO_AGENTS_PER_NODE[size],
+                        });
+                      }}
+                      className="w-full px-3 py-3 rounded-md border text-sm"
+                      style={inputStyle('simulation_size')}
+                    >
+                      <option value="small">Small</option>
+                      <option value="medium">Medium</option>
+                      <option value="large">Large</option>
+                    </select>
+                    <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                      Agents/Node: {form.agents_per_node}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold tracking-wider uppercase flex items-center gap-1"
+                      style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>
+                      Debate Depth <Info size={11} style={{ color: 'hsl(var(--muted-foreground))' }} />
+                    </label>
+                    <select
+                      value={form.debate_depth}
+                      onChange={e => {
+                        const depth = e.target.value as DebateDepth;
+                        setForm({
+                          ...form,
+                          debate_depth: depth,
+                          rounds: DEPTH_TO_ROUNDS[depth],
+                        });
+                      }}
+                      className="w-full px-3 py-3 rounded-md border text-sm"
+                      style={inputStyle('debate_depth')}
+                    >
+                      <option value="quick">Quick</option>
+                      <option value="standard">Standard</option>
+                      <option value="deep">Deep</option>
+                    </select>
+                    <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                      Rounds: {form.rounds}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold tracking-wider uppercase flex items-center gap-1"
+                      style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>
+                      Agents/Round <Info size={11} style={{ color: 'hsl(var(--muted-foreground))' }} />
+                    </label>
+                    <input
+                      type="number"
+                      value={FIXED_AGENTS_PER_ROUND}
+                      disabled
+                      className="w-full px-3 py-3 rounded-md border text-sm"
+                      style={inputStyle('agents_per_round')}
+                    />
+                    <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                      Fixed at {FIXED_AGENTS_PER_ROUND}
+                    </span>
+                  </div>
                 </div>
                 <div className="h-px" style={{ background: 'hsl(var(--border))' }} />
                 <button type="submit" className="w-full flex items-center justify-center gap-2 py-3 rounded-md font-bold text-sm"

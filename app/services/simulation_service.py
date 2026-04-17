@@ -97,8 +97,8 @@ async def run_simulation(
 
     all_turns: List[SimulationTurn] = []
     ordered_agents = sorted(agents, key=lambda agent: agent.id)
-    # Enforce sequential debate turns: one speaker per round.
-    speaker_window = 1
+    # Keep debate behavior predictable across clients.
+    speaker_window = min(2, len(ordered_agents))
     seed_offset = 0
     if seed is not None and len(ordered_agents) > 0:
         seed_offset = random.Random(seed).randrange(len(ordered_agents))
