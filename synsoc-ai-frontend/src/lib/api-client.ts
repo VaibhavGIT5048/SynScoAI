@@ -1,6 +1,7 @@
 const LOCAL_BACKEND_FALLBACK = 'http://127.0.0.1:8000';
 const DEV_PROXY_FALLBACK = '/api';
 const PROD_PROXY_FALLBACK = '/backend';
+const PROD_NETWORK_FALLBACK = 'https://synsoc-api-production.up.railway.app';
 
 function isLocalBrowserHost(): boolean {
   if (typeof window === 'undefined') {
@@ -50,12 +51,47 @@ function resolveApiBase(): string {
 }
 
 const API_BASE = resolveApiBase();
+const ABSOLUTE_API_FALLBACK =
+  import.meta.env.VITE_FALLBACK_API_BASE_URL?.trim().replace(/\/+$/, '') || PROD_NETWORK_FALLBACK;
 const VISITOR_ID_STORAGE_KEY = 'synsoc_visitor_id';
+
+function toFallbackAbsoluteUrl(input: RequestInfo | URL): string | null {
+  if (typeof window === 'undefined' || !isAbsoluteHttpUrl(ABSOLUTE_API_FALLBACK)) {
+    return null;
+  }
+
+  const raw =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : input.url;
+
+  const resolved = new URL(raw, window.location.origin);
+  const normalizedPath = resolved.pathname.replace(/^\/backend(?=\/|$)/, '') || '/';
+  return `${ABSOLUTE_API_FALLBACK}${normalizedPath}${resolved.search}`;
+}
 
 async function performRequest(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(input, init);
   } catch {
+    const shouldRetryWithAbsoluteFallback =
+      import.meta.env.PROD &&
+      !API_BASE.startsWith('http') &&
+      isAbsoluteHttpUrl(ABSOLUTE_API_FALLBACK);
+
+    if (shouldRetryWithAbsoluteFallback) {
+      const fallbackUrl = toFallbackAbsoluteUrl(input);
+      if (fallbackUrl) {
+        try {
+          return await fetch(fallbackUrl, init);
+        } catch {
+          // Continue to user-facing error below.
+        }
+      }
+    }
+
     if (API_BASE.startsWith('http')) {
       throw new Error(
         `Unable to reach backend at ${API_BASE}. Ensure FastAPI is running and VITE_API_BASE_URL is correct.`
@@ -63,7 +99,7 @@ async function performRequest(input: RequestInfo | URL, init?: RequestInit): Pro
     }
 
     throw new Error(
-      'Unable to reach backend API. Ensure the backend is running and VITE_API_BASE_URL is configured.'
+      `Unable to reach backend API via ${API_BASE}. Ensure backend/proxy is reachable. Fallback attempted: ${ABSOLUTE_API_FALLBACK}.`
     );
   }
 }

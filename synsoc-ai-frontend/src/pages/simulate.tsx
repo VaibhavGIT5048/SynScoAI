@@ -932,7 +932,8 @@ export default function SimulatePage() {
           topic: form.topic.trim(),
           context: form.context.trim() || undefined,
           rounds: form.rounds,
-          agents_per_round: form.agents_per_round,
+          // Debate is intentionally sequential; one speaker per round.
+          agents_per_round: 1,
           agents_per_node: form.agents_per_node,
         },
         (event, data) => {
@@ -1082,7 +1083,25 @@ export default function SimulatePage() {
             })();
           }
 
-          else if (event === 'error') { setApiError(data.message); setPhase('config'); }
+          else if (event === 'error') {
+            if (reportReceived) {
+              return;
+            }
+
+            if (currentRunId) {
+              void (async () => {
+                const recovered = await recoverFromRun(currentRunId as string);
+                if (!recovered && isActive) {
+                  setApiError(data.message);
+                  setPhase('config');
+                }
+              })();
+              return;
+            }
+
+            setApiError(data.message);
+            setPhase('config');
+          }
         }
       );
 
@@ -1158,7 +1177,7 @@ export default function SimulatePage() {
                 <div className="grid grid-cols-3 gap-4">
                   {[
                     { key: 'rounds', label: 'Rounds', min: 1, max: 10, hint: '1–10' },
-                    { key: 'agents_per_round', label: 'Agents/Round', min: 1, max: 10, hint: '1–10' },
+                    { key: 'agents_per_round', label: 'Agents/Round', min: 1, max: 1, hint: 'Fixed at 1 (sequential)' },
                     { key: 'agents_per_node', label: 'Agents/Node', min: 1, max: 6, hint: '1–6' },
                   ].map(({ key, label, min, max, hint }) => (
                     <div key={key} className="flex flex-col gap-2">
@@ -1167,7 +1186,8 @@ export default function SimulatePage() {
                         {label} <Info size={11} style={{ color: 'hsl(var(--muted-foreground))' }} />
                       </label>
                       <input type="number" min={min} max={max} value={(form as any)[key]}
-                        onChange={e => setForm({ ...form, [key]: Number(e.target.value) })}
+                        onChange={e => setForm({ ...form, [key]: key === 'agents_per_round' ? 1 : Number(e.target.value) })}
+                        disabled={key === 'agents_per_round'}
                         className="w-full px-3 py-3 rounded-md border text-sm" style={inputStyle(key)} />
                       <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>{hint}</span>
                     </div>

@@ -170,7 +170,8 @@ async def stream_pipeline(http_request: Request, request: PipelineRequest):
             # Step 3 — Simulation (stream each turn live)
             yield sse("status", {"message": "Running multi-agent simulation..."})
             all_turns = []
-            speaker_window = min(request.agents_per_round, len(all_agents))
+            # Enforce sequential debate turns in stream mode.
+            speaker_window = 1
             seed_offset = 0
             if request.random_seed is not None and len(all_agents) > 0:
                 seed_offset = random.Random(request.random_seed).randrange(len(all_agents))
