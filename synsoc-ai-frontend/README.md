@@ -223,9 +223,28 @@ npm run build
 
 ### Deploy options:
 
-- **Vercel/Netlify** - Frontend deployment
+- **Cloudflare Pages/Netlify/Vercel** - Frontend deployment
 - **Railway/Render** - Full-stack deployment
 - **Docker** - Containerized deployment
+
+### Cloudflare Pages (recommended for this repo)
+
+Use these exact project settings:
+
+- **Repository:** `VaibhavGIT5048/SynScoAI`
+- **Branch:** `main`
+- **Root directory:** `synsoc-ai-frontend`
+- **Build command:** `npm run build`
+- **Build output directory:** `dist/client`
+
+Set environment variables in Cloudflare Pages:
+
+```env
+VITE_API_BASE_URL=/backend
+BACKEND_ORIGIN=https://synsoc-api-production.up.railway.app
+```
+
+The repo includes a Pages Function proxy at `functions/backend/[[path]].ts` that forwards `/backend/*` to Railway while preserving request method, headers, query string, and request body (including stream endpoints).
 
 ## 🔧 Configuration
 

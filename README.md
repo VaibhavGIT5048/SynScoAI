@@ -213,6 +213,12 @@ For Netlify production builds, use a same-origin proxy path:
 VITE_API_BASE_URL=/backend
 ```
 
+For Cloudflare Pages production builds, keep the same setting:
+
+```env
+VITE_API_BASE_URL=/backend
+```
+
 ```bash
 npm run dev
 ```
@@ -291,6 +297,24 @@ Open http://localhost:5173
   force = true
 ```
 
+### Frontend — Cloudflare Pages (recommended long-run)
+
+Project settings:
+
+- **Repository:** `VaibhavGIT5048/SynScoAI`
+- **Branch:** `main`
+- **Root directory:** `synsoc-ai-frontend`
+- **Build command:** `npm run build`
+- **Build output directory:** `dist/client`
+
+Keep frontend API calls same-origin via `VITE_API_BASE_URL=/backend` and use the committed Pages Function proxy:
+
+- [synsoc-ai-frontend/functions/backend/[[path]].ts](synsoc-ai-frontend/functions/backend/[[path]].ts)
+
+Set Cloudflare Pages environment variable:
+
+- `BACKEND_ORIGIN=https://synsoc-api-production.up.railway.app`
+
 ### Backend — Railway (live)
 
 **Build command:**
@@ -365,6 +389,12 @@ Set backend `ALLOWED_ORIGINS` to include your frontend origin and redeploy the b
 
 ```
 ALLOWED_ORIGINS=http://localhost:5173,https://synsoc-ai.netlify.app
+```
+
+When migrating frontend to Cloudflare Pages, include your new domains too:
+
+```
+ALLOWED_ORIGINS=http://localhost:5173,https://synsoc-ai.netlify.app,https://<project>.pages.dev,https://<your-custom-domain>
 ```
 </details>
 
