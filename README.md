@@ -11,7 +11,7 @@
 
 > **Multi-agent social simulation engine.** Enter any policy or social topic and SynSoc AI generates a stakeholder graph, spawns 30+ ideology-diverse agents, streams live debate rounds, and returns decision-ready reports with conflict pressure, coalition signals, and action paths.
 
-**Live app ->** [https://synsoc-ai.netlify.app ](https://synscoai.pages.dev/) 
+**Live app ->** (https://synscoai.pages.dev/) 
 **API docs ->** https://synsoc-api-production.up.railway.app/docs
 
 ---
