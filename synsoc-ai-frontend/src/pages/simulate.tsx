@@ -34,6 +34,10 @@ const ACTION_COLORS: Record<string, string> = {
   agrees: '#00ff88',
 };
 
+const MAX_TOPIC_CHARS = 240;
+const MAX_CONTEXT_CHARS = 5000;
+const LONG_RUN_TURN_THRESHOLD = 24;
+
 type DebateEvent = {
   id: string;
   round: number;
@@ -75,6 +79,14 @@ const DEPTH_TO_ROUNDS: Record<DebateDepth, number> = {
   quick: 2,
   standard: 3,
   deep: 5,
+};
+
+const DEEP_PRESET = {
+  debate_depth: 'deep' as DebateDepth,
+  rounds: DEPTH_TO_ROUNDS.deep,
+  simulation_size: 'large' as SimulationSize,
+  agents_per_node: SIZE_TO_AGENTS_PER_NODE.large,
+  agents_per_round: 6,
 };
 
 type SimulationWorkspaceSnapshot = {
@@ -154,6 +166,72 @@ export default function SimulatePage() {
   }, {});
 
   const [sections, setSections] = useState({ legend: true, roster: true, timeline: true });
+
+  const trimmedTopic = form.topic.trim();
+  const trimmedContext = form.context.trim();
+  const topicLength = trimmedTopic.length;
+  const contextLength = trimmedContext.length;
+  const topicOverLimit = topicLength > MAX_TOPIC_CHARS;
+  const contextOverLimit = contextLength > MAX_CONTEXT_CHARS;
+  const estimatedTurns = Math.max(1, form.rounds) * Math.max(1, form.agents_per_round);
+  const isDeepRun =
+    form.debate_depth === 'deep' ||
+    form.simulation_size === 'large' ||
+    form.agents_per_round >= 5 ||
+    form.agents_per_node >= 3 ||
+    estimatedTurns >= LONG_RUN_TURN_THRESHOLD;
+  const deepPresetActive =
+    form.debate_depth === DEEP_PRESET.debate_depth &&
+    form.rounds === DEEP_PRESET.rounds &&
+    form.simulation_size === DEEP_PRESET.simulation_size &&
+    form.agents_per_node === DEEP_PRESET.agents_per_node &&
+    form.agents_per_round === DEEP_PRESET.agents_per_round;
+
+  const mergeContext = (base: string, addition: string) => {
+    const safeAddition = addition.trim();
+    if (!safeAddition) return base;
+    const prefix = base.trim();
+    const merged = prefix ? `${prefix}\n\n${safeAddition}` : safeAddition;
+    if (merged.length <= MAX_CONTEXT_CHARS) return merged;
+    return `${merged.slice(0, MAX_CONTEXT_CHARS - 1).trimEnd()}…`;
+  };
+
+  const handleShortenTopic = () => {
+    setForm((prev) => {
+      const normalized = prev.topic.trim();
+      if (normalized.length <= MAX_TOPIC_CHARS) return prev;
+
+      const head = normalized.slice(0, MAX_TOPIC_CHARS - 1).trimEnd();
+      const tail = normalized.slice(MAX_TOPIC_CHARS - 1).trim();
+      const shortenedTopic = `${head}…`;
+      const overflowNote = tail ? `Additional detail from topic: ${tail}` : '';
+      const mergedContext = mergeContext(prev.context, overflowNote);
+
+      return {
+        ...prev,
+        topic: shortenedTopic,
+        context: mergedContext,
+      };
+    });
+    setErrors((prev) => {
+      if (!prev.topic) return prev;
+      const next = { ...prev };
+      delete next.topic;
+      return next;
+    });
+  };
+
+  const applyDeepPreset = () => {
+    setForm((prev) => ({
+      ...prev,
+      debate_depth: DEEP_PRESET.debate_depth,
+      rounds: DEEP_PRESET.rounds,
+      simulation_size: DEEP_PRESET.simulation_size,
+      agents_per_round: DEEP_PRESET.agents_per_round,
+      agents_per_node: DEEP_PRESET.agents_per_node,
+    }));
+    setErrors({});
+  };
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -702,7 +780,13 @@ export default function SimulatePage() {
     e.preventDefault();
 
     const errs: Record<string, string> = {};
-    if (!form.topic.trim()) errs.topic = 'Topic is required.';
+    if (!trimmedTopic) errs.topic = 'Topic is required.';
+    if (topicOverLimit) {
+      errs.topic = `Topic exceeds ${MAX_TOPIC_CHARS} characters. Use Shorten to move overflow into context.`;
+    }
+    if (contextOverLimit) {
+      errs.context = `Context exceeds ${MAX_CONTEXT_CHARS} characters.`;
+    }
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({}); setApiError(null);
     setNodes([]); setGraphEdgesState([]); setAgents([]); setTurns([]); setDebateEvents([]);
@@ -714,6 +798,11 @@ export default function SimulatePage() {
     localStorage.removeItem(WORKSPACE_STORAGE_KEY);
     localStorage.removeItem('synsoc_last_run_id');
     d3InitRef.current = false;
+    if (isDeepRun) {
+      setStatusMsg('Deep simulation queued — this may take longer and can hit request limits.');
+    } else {
+      setStatusMsg('');
+    }
     setPhase('live');
   };
 
@@ -855,6 +944,8 @@ export default function SimulatePage() {
       let currentRunId: string | null = lastRunId;
       let reportReceived = false;
       let recoveringFromRun = false;
+      const longRun = isDeepRun;
+      const longRunSuffix = longRun ? ' (deep run — may take longer)' : '';
 
       const finalizeFromPipelineResult = (resultPayload: any, runId: string | null) => {
         if (!isActive) return;
@@ -972,7 +1063,12 @@ export default function SimulatePage() {
             }
           }
 
-          else if (event === 'status') { setStatusMsg(data.message); }
+          else if (event === 'status') {
+            const baseMsg = typeof data.message === 'string' ? data.message : '';
+            const needsLongRunSuffix =
+              longRun && (baseMsg.includes('Running') || baseMsg.includes('Generating'));
+            setStatusMsg(needsLongRunSuffix ? `${baseMsg}${longRunSuffix}` : baseMsg);
+          }
 
           else if (event === 'graph') {
             graphData = data.graph; graphEdges = data.graph.edges;
@@ -1006,12 +1102,17 @@ export default function SimulatePage() {
 
           else if (event === 'agents_complete') {
             agentsData = { topic: form.topic, total_agents: data.total_agents, agents: allAgents };
-            setStatusMsg(`${data.total_agents} agents ready — debate starting...`);
+            const readyMsg = `${data.total_agents} agents ready — debate starting...`;
+            setStatusMsg(longRun ? `${readyMsg} Deep run in progress.` : readyMsg);
           }
 
           else if (event === 'round_start') {
             prevTurn = null;
-            setStatusMsg(`Round ${data.round} of ${data.total_rounds}`);
+            setStatusMsg(
+              longRun
+                ? `Round ${data.round} of ${data.total_rounds} — deep run`
+                : `Round ${data.round} of ${data.total_rounds}`
+            );
           }
 
           else if (event === 'turn') {
@@ -1048,7 +1149,11 @@ export default function SimulatePage() {
 
           else if (event === 'simulation_complete') {
             simData = { topic: form.topic, total_rounds: form.rounds, total_turns: allTurns.length, turns: allTurns, key_tensions: data.key_tensions, dominant_stances: data.dominant_stances };
-            setStatusMsg('Simulation done — generating report...');
+            setStatusMsg(
+              longRun
+                ? 'Simulation done — generating report (deep run, may take longer)...'
+                : 'Simulation done — generating report...'
+            );
             simRef.current?.alphaTarget(0);
             simRef.current?.stop();
           }
@@ -1140,7 +1245,9 @@ export default function SimulatePage() {
 
   const inputStyle = (field: string) => ({
     background: 'hsl(var(--background))', color: 'hsl(var(--foreground))',
-    borderColor: errors[field] ? '#ef4444' : 'hsl(var(--border))',
+    borderColor: (errors[field] || (field === 'topic' && topicOverLimit) || (field === 'context' && contextOverLimit))
+      ? '#ef4444'
+      : 'hsl(var(--border))',
     outline: 'none', fontFamily: 'var(--font-sans)',
   });
 
@@ -1187,6 +1294,21 @@ export default function SimulatePage() {
                   <input type="text" placeholder="What societal topic to simulate?"
                     value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })}
                     className="w-full px-4 py-3 rounded-md border text-sm" style={inputStyle('topic')} />
+                  <div className="flex items-center justify-between text-xs">
+                    <span style={{ color: topicOverLimit ? '#ef4444' : 'hsl(var(--muted-foreground))' }}>
+                      {topicLength}/{MAX_TOPIC_CHARS} characters
+                    </span>
+                    {topicOverLimit && (
+                      <button
+                        type="button"
+                        onClick={handleShortenTopic}
+                        className="px-2 py-1 rounded-md border"
+                        style={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 600 }}
+                      >
+                        Shorten + move overflow
+                      </button>
+                    )}
+                  </div>
                   {errors.topic && <span className="text-xs" style={{ color: '#ef4444' }}>{errors.topic}</span>}
                   <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>e.g. "College fee increase", "AI replacing jobs"</span>
                 </div>
@@ -1198,6 +1320,25 @@ export default function SimulatePage() {
                   <textarea placeholder="Region, background, constraints..."
                     value={form.context} onChange={e => setForm({ ...form, context: e.target.value })}
                     rows={3} className="w-full px-4 py-3 rounded-md border text-sm resize-none" style={inputStyle('context')} />
+                  {errors.context && <span className="text-xs" style={{ color: '#ef4444' }}>{errors.context}</span>}
+                </div>
+                <div className="flex items-center justify-between rounded-md border px-4 py-3"
+                  style={{ borderColor: 'hsl(var(--border))', background: 'hsl(var(--background))' }}>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-bold tracking-wider uppercase"
+                      style={{ fontFamily: 'var(--font-heading)', color: 'hsl(var(--foreground))' }}>Deep Simulation Preset</span>
+                    <span className="text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                      {DEEP_PRESET.rounds} rounds · {DEEP_PRESET.agents_per_round} agents/round · {DEEP_PRESET.simulation_size} size
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyDeepPreset}
+                    className="px-3 py-2 rounded-md border text-xs font-bold"
+                    style={{ borderColor: 'hsl(var(--primary) / 0.5)', color: 'hsl(var(--primary))' }}
+                  >
+                    {deepPresetActive ? 'Preset Active' : 'Apply Preset'}
+                  </button>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="flex flex-col gap-2">
@@ -1273,6 +1414,16 @@ export default function SimulatePage() {
                     </span>
                   </div>
                 </div>
+                {isDeepRun && (
+                  <div className="rounded-md border px-4 py-3 text-xs"
+                    style={{ borderColor: 'hsl(var(--primary) / 0.35)', background: 'hsl(var(--primary) / 0.08)' }}>
+                    <p className="font-bold" style={{ color: 'hsl(var(--foreground))' }}>Long-run warning</p>
+                    <p style={{ color: 'hsl(var(--muted-foreground))' }}>
+                      Estimated turns: ~{estimatedTurns}. Deep runs take longer and can hit request limits. If it stalls,
+                      reduce rounds or agents per round.
+                    </p>
+                  </div>
+                )}
                 <div className="h-px" style={{ background: 'hsl(var(--border))' }} />
                 <button type="submit" className="w-full flex items-center justify-center gap-2 py-3 rounded-md font-bold text-sm"
                   style={{ fontFamily: 'var(--font-heading)', background: 'hsl(var(--primary))', color: '#0a0a0a', boxShadow: '0 0 20px hsl(var(--primary) / 0.3)' }}>
